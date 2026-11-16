@@ -361,7 +361,9 @@
 
   /* ---------- 자세 점검, 품질, 태블릿 옮김 ---------- */
 
-  var LIMIT={distMin:35,distMax:70,angle:25,light:45};
+  /* 거리는 cm 가 아니라 홍채가 몇 픽셀로 찍히는지로 봅니다. 카메라 화각과 줌에 따라 같은 거리라도
+     찍히는 크기가 달라서, 실제로 눈을 읽을 수 있는지는 픽셀 수가 말해 줍니다. */
+  var LIMIT={irisMin:8,angle:25,light:45};
 
   /* m: 측정값 또는 null. light: 눈 주변 밝기(0~255) 또는 null(아직 모름)
      돌려주는 값 {ok, items:{face,dist,angle,eyes,light}, msg} — msg는 보호자에게 보여 줄 말 */
@@ -372,17 +374,19 @@
     var off=Math.abs(dx)>0.2||Math.abs(dy)>0.22;
     it.light=light==null||light>=LIMIT.light;
     it.face=!m.cut&&!off;
-    it.dist=m.distCm>=LIMIT.distMin&&m.distCm<=LIMIT.distMax;
+    /* 너무 가까움: 얼굴이 화면을 거의 다 채움 */
+    var big=(m.box.x1-m.box.x0)>0.7||(m.box.y1-m.box.y0)>0.85;
+    it.dist=m.irisPx>=LIMIT.irisMin&&!big;
     it.angle=Math.abs(m.yaw)<=LIMIT.angle&&Math.abs(m.pitch)<=LIMIT.angle&&Math.abs(m.roll)<=LIMIT.angle;
     it.eyes=m.eyes===2;
     var msg="좋습니다. 그대로 계세요";
     if(!it.light)msg="얼굴 쪽을 더 밝게 해 주세요";
     else if(!it.face){
-      if(!off&&m.distCm<LIMIT.distMin+10)msg="조금 더 멀리 놓아 주세요";
+      if(!off||big)msg="조금 더 멀리 놓아 주세요";
       else if(Math.abs(dx)>=Math.abs(dy))msg=dx<0?"태블릿을 왼쪽으로 옮겨 주세요":"태블릿을 오른쪽으로 옮겨 주세요";
       else msg=dy<0?"태블릿을 위로 옮겨 주세요":"태블릿을 아래로 옮겨 주세요";
     }
-    else if(!it.dist)msg=m.distCm<LIMIT.distMin?"조금 더 멀리 놓아 주세요":"조금 더 가까이 놓아 주세요";
+    else if(!it.dist)msg=big?"조금 더 멀리 놓아 주세요":"조금 더 가까이 놓아 주세요";
     else if(!it.angle)msg=Math.abs(m.roll)>LIMIT.angle?"태블릿을 얼굴 기울기에 맞춰 돌려 주세요":"태블릿이 얼굴을 똑바로 마주 보게 돌려 주세요";
     else if(!it.eyes)msg="두 눈이 다 보이게 해 주세요";
     return {ok:it.face&&it.dist&&it.angle&&it.eyes&&it.light,items:it,msg:msg};
@@ -399,6 +403,54 @@
   }
   /* 저사양 기기면 모델 실행을 초당 15회쯤으로 낮춥니다. */
   function needsLowRate(inferMs,fps){return inferMs>40||(fps>0&&fps<18)}
+
+  /* ---------- 먼 얼굴 찾기: 영상을 잘라 키워서 읽기 ---------- */
+
+  /* 얼굴이 작게 찍히면 화면 전체로는 못 찾습니다. 화면을 겹치는 조각으로 나눠 하나씩 넣어 봅니다.
+     돌려주는 값: 차례로 넣어 볼 범위들. null 은 화면 전체, 가운데에 가까운 조각부터 */
+  function searchRegions(vw,vh){
+    var out=[null],levels=vw>=2500?[2,3,4]:[2,3];
+    levels.forEach(function(L){
+      var w=vw/L,h=vh/L,n=2*L-1,part=[],i,j;
+      for(j=0;j<n;j++)for(i=0;i<n;i++)part.push({x:i*w/2,y:j*h/2,w:w,h:h});
+      part.sort(function(a,b){
+        function d(r){return Math.abs(r.x+r.w/2-vw/2)/vw+Math.abs(r.y+r.h/2-vh/2)/vh}
+        return d(a)-d(b);
+      });
+      out=out.concat(part);
+    });
+    return out;
+  }
+  /* 찾은 얼굴(뒤집은 0~1 좌표의 box) 둘레를 넉넉히 잡은 정사각형 범위(원본 영상 픽셀) */
+  function cropAround(box,vw,vh){
+    var x0=(1-box.x1)*vw,x1=(1-box.x0)*vw,y0=box.y0*vh,y1=box.y1*vh;
+    var side=Math.max(x1-x0,y1-y0)*1.8,W=Math.min(vw,side),H=Math.min(vh,side);
+    return {x:clamp((x0+x1)/2-W/2,0,vw-W),y:clamp((y0+y1)/2-H/2,0,vh-H),w:W,h:H};
+  }
+  /* 읽은 얼굴이 말이 되는지. 잘라 넣은 범위(region, 없으면 화면 전체)에 비해 얼굴이 터무니없이 작거나,
+     홍채와 눈 너비의 비율이 사람 눈과 동떨어지면 잘못 읽은 것으로 보고 버립니다. */
+  function plausible(m,region,vw){
+    var faceW=(m.box.x1-m.box.x0)*vw,ratio=m.irisPx/((m.R.w+m.L.w)/2);
+    if(!(ratio>0.22&&ratio<0.75))return false;
+    return faceW>=(region?region.w:vw)*0.04;
+  }
+  /* 범위를 조금씩 따라 움직이면 추적이 흔들리므로, 얼굴이 꽤 벗어나거나 크기가 달라졌을 때만 새로 잡습니다. */
+  function cropStale(cur,want){
+    var dx=Math.abs((cur.x+cur.w/2)-(want.x+want.w/2)),dy=Math.abs((cur.y+cur.h/2)-(want.y+want.h/2)),r=want.w/cur.w;
+    return dx>cur.w*0.12||dy>cur.h*0.12||r<0.8||r>1.25;
+  }
+  /* 자세 점검 중 카메라 조절: 홍채가 작으면 해상도를 올리고, 그래도 작으면 줌을 당깁니다.
+     얼굴이 화면 끝에 닿으면 줌을 풉니다. s: {irisPx, box, cut, zoom, zoomMin, zoomMax, canRes}
+     돌려주는 값: {res:true} 해상도 올리기, {zoom:값} 줌 바꾸기, null 그대로 */
+  function tuneCamera(s){
+    var bw=s.box.x1-s.box.x0,bh=s.box.y1-s.box.y0,hasZoom=s.zoomMax>s.zoomMin;
+    var edge=s.cut||s.box.x0<0.04||s.box.x1>0.96||s.box.y0<0.04||s.box.y1>0.96;
+    if(hasZoom&&s.zoom>s.zoomMin&&(edge||bw>0.6||bh>0.75))return {zoom:Math.max(s.zoomMin,s.zoom/1.3)};
+    if(s.irisPx>=12)return null;
+    if(s.canRes)return {res:true};
+    if(hasZoom&&s.zoom<s.zoomMax&&!edge&&bw*1.3<0.5&&bh*1.3<0.65)return {zoom:Math.min(s.zoomMax,s.zoom*1.3)};
+    return null;
+  }
 
   function FpsMeter(){this.t=null;this.fps=0}
   FpsMeter.prototype.update=function(t){
@@ -435,6 +487,7 @@
     OneEuro:OneEuro,zoneOf:zoneOf,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
     BlinkDetector:BlinkDetector,Tracker:Tracker,
     Collector:Collector,HoldGate:HoldGate,
+    searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
     postureCheck:postureCheck,quality:quality,needsLowRate:needsLowRate,FpsMeter:FpsMeter,
     baselineOf:baselineOf,MoveDetector:MoveDetector
   };

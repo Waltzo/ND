@@ -365,8 +365,14 @@ test("자세 점검이 보호자 안내를 고른다",function(){
   assert.ok(/보이지 않습니다/.test(P(null,100).msg));
   var ok=P(meas({distCm:50}),120);
   assert.strictEqual(ok.ok,true,JSON.stringify(ok));
-  assert.ok(/가까이/.test(P(meas({distCm:90}),120).msg));
-  assert.ok(/멀리/.test(P(meas({distCm:25}),120).msg));
+  assert.ok(/가까이/.test(P(meas({distCm:90}),120).msg),"홍채가 8px 보다 작게 찍힘");
+  assert.strictEqual(P(meas({distCm:90}),120).items.dist,false);
+  assert.ok(/멀리/.test(P(meas({distCm:13}),120).msg),"얼굴이 화면을 다 채움");
+  /* 거리는 cm 가 아니라 홍채 픽셀로 봅니다: 멀어도 크게 찍히면(줌) 통과 */
+  var far=meas({distCm:50});far.distCm=100;
+  assert.strictEqual(P(far,120).ok,true,"1m 라도 홍채가 충분히 크면 통과");
+  var small=meas({distCm:50});small.irisPx=6;
+  assert.strictEqual(P(small,120).items.dist,false);
   assert.ok(/왼쪽/.test(P(meas({cx:0.2}),120).msg));
   assert.ok(/오른쪽/.test(P(meas({cx:0.8}),120).msg));
   assert.ok(/위로/.test(P(meas({cy:0.2}),120).msg));
@@ -380,6 +386,52 @@ test("자세 점검이 보호자 안내를 고른다",function(){
   [e.outer,e.inner].forEach(function(i){lm[i].x=mid+(lm[i].x-mid)*0.4});
   r=P(G.measure(lm,{vw:VW,vh:VH}),120);
   assert.strictEqual(r.items.eyes,false);assert.strictEqual(r.ok,false);
+});
+test("먼 얼굴 찾기: 화면을 조각으로 나눠 차례로 본다",function(){
+  var r=G.searchRegions(1920,1080);
+  assert.strictEqual(r[0],null,"먼저 화면 전체");
+  assert.strictEqual(r.length,1+9+25);
+  r.slice(1).forEach(function(t){assert.ok(t.x>=0&&t.y>=0&&t.x+t.w<=1920.01&&t.y+t.h<=1080.01,JSON.stringify(t));});
+  /* 화면 어디에 있는 작은 얼굴이든, 그 얼굴이 통째로 들어가는 1/3 크기 조각이 있어야 합니다 */
+  for(var fx=60;fx<1860;fx+=97)for(var fy=60;fy<1020;fy+=83){
+    var ok=r.some(function(t){return t&&t.w<700&&fx-50>=t.x&&fx+50<=t.x+t.w&&fy-60>=t.y&&fy+60<=t.y+t.h});
+    assert.ok(ok,"얼굴 위치 "+fx+","+fy);
+  }
+  assert.strictEqual(G.searchRegions(4032,3024).length,1+9+25+49,"큰 영상은 한 단계 더");
+});
+test("얼굴 둘레 범위를 잡고, 꽤 벗어났을 때만 새로 잡는다",function(){
+  var box={x0:0.45,x1:0.55,y0:0.4,y1:0.6},c=G.cropAround(box,1920,1080);
+  near(c.w,216*1.8,0.5);near(c.x+c.w/2,960,0.5);near(c.y+c.h/2,540,0.5);
+  /* 뒤집은 좌표의 오른쪽(x 0.9)은 원본 영상의 왼쪽 */
+  var left=G.cropAround({x0:0.85,x1:0.95,y0:0.4,y1:0.6},1920,1080);
+  assert.ok(left.x<300,"원본 왼쪽: "+left.x);assert.ok(left.x>=0);
+  var edge=G.cropAround({x0:0,x1:0.1,y0:0,y1:0.2},1920,1080);
+  assert.ok(edge.x+edge.w<=1920&&edge.y>=0,"영상 밖으로 나가지 않음");
+  assert.strictEqual(G.cropStale(c,G.cropAround({x0:0.455,x1:0.555,y0:0.4,y1:0.6},1920,1080)),false,"조금 움직임");
+  assert.strictEqual(G.cropStale(c,G.cropAround({x0:0.5,x1:0.6,y0:0.4,y1:0.6},1920,1080)),true,"많이 움직임");
+  assert.strictEqual(G.cropStale(c,G.cropAround({x0:0.43,x1:0.57,y0:0.36,y1:0.64},1920,1080)),true,"크기가 달라짐");
+});
+test("잘못 읽은 얼굴은 버린다",function(){
+  var m=meas({distCm:50});
+  assert.strictEqual(G.plausible(m,null,VW),true);
+  assert.strictEqual(G.plausible(m,{x:0,y:0,w:400,h:400},VW),true);
+  assert.strictEqual(G.plausible(m,{x:0,y:0,w:400,h:400},VW*40),true,"큰 영상에서도 잘라 넣은 범위에 견줍니다");
+  var tiny=meas({distCm:50});tiny.box={x0:0.5,x1:0.51,y0:0.5,y1:0.52};
+  assert.strictEqual(G.plausible(tiny,{x:0,y:0,w:400,h:400},VW),false,"범위에 비해 얼굴이 너무 작음");
+  var odd=meas({distCm:50});odd.irisPx=odd.R.w*1.2;
+  assert.strictEqual(G.plausible(odd,null,VW),false,"홍채가 눈보다 큼");
+});
+test("자세 점검 중 카메라 조절: 해상도, 줌",function(){
+  var box={x0:0.46,x1:0.54,y0:0.42,y1:0.58},T=G.tuneCamera;
+  assert.deepStrictEqual(T({irisPx:5,box:box,cut:false,zoom:1,zoomMin:1,zoomMax:4,canRes:true}),{res:true},"먼저 해상도");
+  near(T({irisPx:5,box:box,cut:false,zoom:1,zoomMin:1,zoomMax:4,canRes:false}).zoom,1.3,1e-9,"다음은 줌");
+  assert.strictEqual(T({irisPx:5,box:box,cut:false,zoom:1,zoomMin:1,zoomMax:1,canRes:false}),null,"줌이 없으면 그대로");
+  assert.strictEqual(T({irisPx:14,box:box,cut:false,zoom:1,zoomMin:1,zoomMax:4,canRes:true}),null,"충분하면 그대로");
+  near(T({irisPx:5,box:box,cut:false,zoom:3.9,zoomMin:1,zoomMax:4,canRes:false}).zoom,4,1e-9,"최대를 넘지 않음");
+  var big={x0:0.2,x1:0.85,y0:0.1,y1:0.9};
+  near(T({irisPx:20,box:big,cut:false,zoom:2.6,zoomMin:1,zoomMax:4,canRes:false}).zoom,2,1e-9,"얼굴이 너무 크면 줌을 풂");
+  assert.strictEqual(T({irisPx:5,box:{x0:0.3,x1:0.7,y0:0.3,y1:0.7},cut:false,zoom:1,zoomMin:1,zoomMax:4,canRes:false}),null,"더 당기면 얼굴이 잘릴 때는 그대로");
+  assert.ok(T({irisPx:20,box:{x0:0,x1:0.2,y0:0.3,y1:0.6},cut:true,zoom:2,zoomMin:1,zoomMax:4,canRes:false}).zoom<2,"끝에 닿으면 풂");
 });
 test("조건이 1초 이어져야 통과한다",function(){
   var g=new G.HoldGate(1000);

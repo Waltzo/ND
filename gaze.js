@@ -19,6 +19,10 @@
   var video=null,stream=null,vision=null,landmarker=null,libP=null;
   var lastVT=-1,lastInfer=0,minGap=0,errors=0;
   var lastFrameAt=0,lastLoopAt=0,modelP=null,frameC=0,eyesLostAt=null;
+  /* 먼 얼굴: 얼굴 둘레만 잘라 키워서 읽습니다. crop 은 지금 따라가는 범위, 없으면 조각을 돌아가며 찾습니다. */
+  var crop=null,cropCv=null,region=null,regions=null,regionIdx=0,miss=0;
+  var tuneAt=0,resTried=false,zoomDead=false;
+  var flush=false,flushed=false;   /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
   var light=null,lightAt=0,lightCv=null;
   var blinkIdx=null;
   var lastM=null;            /* 가장 최근 측정값(진단 표시용) */
@@ -126,9 +130,11 @@
     diag.hidden=!(opt.diag&&mode!=="off"&&mode!=="loading");
     if(diag.hidden)return;
     drawView(diagCv,m,true);
-    var z=mode==="run"&&lastOut&&lastOut.zone?lastOut.zone:"-",r=Math.round;
+    var z=mode==="run"&&lastOut&&lastOut.zone?lastOut.zone:"-",r=Math.round,zoom=null;
+    try{zoom=stream?stream.getVideoTracks()[0].getSettings().zoom:null;}catch(err){}
+    var cam=video&&video.videoWidth?"영상 "+video.videoWidth+"x"+video.videoHeight+(zoom?" · 줌 "+(+zoom).toFixed(1)+"배":"")+(crop?" · 잘라 읽기":"")+"\n":"";
     diagTx.textContent=m?
-      "거리 "+r(m.distCm)+"cm · 홍채 "+m.irisPx.toFixed(1)+"px\n"+
+      cam+"홍채 "+m.irisPx.toFixed(1)+"px · 얼굴 너비 "+r((m.box.x1-m.box.x0)*100)+"%\n"+
       "좌우 "+r(m.yaw)+"° 상하 "+r(m.pitch)+"° 기울임 "+r(m.roll)+"°\n"+
       "초당 "+r(fpsM.fps)+"회"+(lowRate?" (낮춤)":"")+" · 밝기 "+(light==null?"-":r(light))+"\n"+
       "보는 칸 "+z+(score==null?"":" · 정확도 "+score+" / 9")
@@ -140,7 +146,7 @@
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return Promise.reject({name:"NoApi"});
     return navigator.mediaDevices.getUserMedia({
       audio:false,
-      video:{facingMode:"user",width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}
+      video:{facingMode:"user",width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}
     });
   }
   function attach(s){
@@ -212,6 +218,7 @@
       if(id!==runId)return;
       lastVT=-1;lastInfer=0;errors=0;light=null;lastFrameAt=lastLoopAt=performance.now();
       fpsM=new C.FpsMeter();inferMs=0;frames=0;lowRate=false;minGap=0;
+      crop=null;regions=null;regionIdx=0;miss=0;tuneAt=0;resTried=false;zoomDead=false;flush=false;
       enterPosture();
       requestAnimationFrame(loop);
     }).catch(function(err){
@@ -239,11 +246,70 @@
     if(blinkIdx.l<0||blinkIdx.r<0||!cat[blinkIdx.l]||!cat[blinkIdx.r])return null;
     return {l:cat[blinkIdx.l].score,r:cat[blinkIdx.r].score};
   }
+  /* 이번 프레임에 모델에 넣을 것. 따라가는 범위가 있으면 그것, 없으면 찾는 차례의 조각(null 은 화면 전체) */
+  function pickSource(){
+    var vw=video.videoWidth,vh=video.videoHeight;
+    cropCv=cropCv||document.createElement("canvas");
+    flushed=flush;
+    if(flush){
+      flush=false;
+      cropCv.width=64;cropCv.height=64;
+      var bg=cropCv.getContext("2d");bg.fillStyle="#808080";bg.fillRect(0,0,64,64);
+      return cropCv;
+    }
+    region=crop;
+    if(!region){
+      if(!regions||regions.vw!==vw||regions.vh!==vh){regions=C.searchRegions(vw,vh);regions.vw=vw;regions.vh=vh;regionIdx=0;}
+      region=regions[regionIdx];regionIdx=(regionIdx+1)%regions.length;
+    }
+    if(!region)return video;
+    var k=Math.min(4,Math.max(1,640/region.w));       /* 잘라 낸 폭이 640쯤 되게 키우되 4배까지만 */
+    var w=Math.round(region.w*k),h=Math.round(region.h*k);
+    if(cropCv.width!==w)cropCv.width=w;
+    if(cropCv.height!==h)cropCv.height=h;
+    cropCv.getContext("2d").drawImage(video,region.x,region.y,region.w,region.h,0,0,w,h);
+    return cropCv;
+  }
   function read(res){
-    var lm=res&&res.faceLandmarks&&res.faceLandmarks[0];
-    if(!lm)return null;
-    var mx=res.facialTransformationMatrixes&&res.facialTransformationMatrixes[0];
-    return C.measure(lm,{vw:video.videoWidth,vh:video.videoHeight,matrix:mx?mx.data:null,blink:readBlink(res)});
+    var vw=video.videoWidth,vh=video.videoHeight,r=region;
+    if(flushed)return lastM;                           /* 추적을 지우는 프레임: 직전 값을 그대로 씁니다 */
+    var lm=res&&res.faceLandmarks&&res.faceLandmarks[0],m=null;
+    if(lm){
+      /* 잘라 넣었으면 좌표를 원본 영상 기준으로 되돌립니다 */
+      if(r)lm=lm.map(function(p){return {x:(r.x+p.x*r.w)/vw,y:(r.y+p.y*r.h)/vh,z:p.z}});
+      var mx=res.facialTransformationMatrixes&&res.facialTransformationMatrixes[0];
+      m=C.measure(lm,{vw:vw,vh:vh,matrix:mx?mx.data:null,blink:readBlink(res)});
+      if(m&&!C.plausible(m,r,vw))m=null;
+    }
+    if(!m){
+      if(crop&&++miss>5){crop=null;regionIdx=0;flush=true;}   /* 놓쳤으면 화면 전체부터 다시 찾기 */
+      return null;
+    }
+    miss=0;
+    var want=C.cropAround(m.box,vw,vh);
+    if(!crop||C.cropStale(crop,want)){crop=want;flush=true;}
+    return m;
+  }
+  /* 자세 점검 중에만: 홍채가 작게 찍히면 해상도를 올리고 카메라 줌을 당깁니다. 보정 뒤에는 건드리지 않습니다. */
+  function tune(m,now){
+    if(sim||!m||!stream||now-tuneAt<1200)return;
+    var track=stream.getVideoTracks()[0],caps={},set={};
+    try{caps=track.getCapabilities?track.getCapabilities():{};set=track.getSettings?track.getSettings():{};}catch(err){return;}
+    var z=caps.zoom,hasZoom=!zoomDead&&z&&typeof z.max==="number"&&z.max>z.min;
+    var canRes=!resTried&&caps.width&&caps.height&&caps.width.max>video.videoWidth*1.2;
+    var act=C.tuneCamera({irisPx:m.irisPx,box:m.box,cut:m.cut,zoom:hasZoom?(set.zoom||z.min):1,
+      zoomMin:hasZoom?z.min:1,zoomMax:hasZoom?z.max:1,canRes:!!canRes});
+    if(!act)return;
+    tuneAt=now;
+    var id=runId;
+    function done(){if(id===runId){crop=null;regionIdx=0;gate.since=null;flush=true;}}
+    if(act.res){
+      resTried=true;
+      track.applyConstraints({width:{ideal:caps.width.max},height:{ideal:caps.height.max}}).then(done,function(){});
+    }else{
+      /* Center Stage 가 켜져 있으면 줌이 잠겨 있어 실패합니다. 그러면 더 시도하지 않습니다. */
+      track.applyConstraints({advanced:[{zoom:act.zoom}]}).then(done,function(){zoomDead=true;});
+    }
   }
   /* 눈 주변 밝기(0~255). 작은 캔버스에 눈 부분만 옮겨 평균을 냅니다. */
   function measureLight(m,now){
@@ -276,7 +342,7 @@
     if(now-lastInfer<minGap)return;
     lastVT=video.currentTime;lastInfer=now;
     var res=null;
-    try{res=landmarker.detectForVideo(video,now);errors=0;}
+    try{res=landmarker.detectForVideo(pickSource(),now);errors=0;}
     catch(err){if(++errors>30){fail("얼굴 인식이 멈췄습니다.");}return;}
     lastFrameAt=now;
     /* 실제 속도를 재서, 느린 기기에서는 모델 실행을 초당 15회쯤으로 낮춥니다. */
@@ -329,6 +395,7 @@
     ui.sub.textContent="모두 맞으면 저절로 다음으로 넘어갑니다.";
   }
   function stepPosture(m,now){
+    tune(m,now);
     var p=C.postureCheck(m,light),prog=gate.update(p.ok,now);
     if(ui.msg.textContent!==p.msg)ui.msg.textContent=p.msg;
     Array.prototype.forEach.call(ui.list.children,function(li){li.classList.toggle("is-ok",!!p.items[li.dataset.k])});
@@ -554,6 +621,6 @@
     start:start,stop:stop,recalibrate:recalibrate,verify:verifyNow,feed:feed,
     mode:function(){return mode},
     /* 진단과 시험용: 지금 상태를 그대로 보여 줍니다 */
-    debug:function(){return {mode:mode,m:lastM,out:lastOut,light:light,model:model,base:base,fps:fpsM.fps,inferMs:inferMs,lowRate:lowRate,score:score}}
+    debug:function(){return {mode:mode,m:lastM,crop:crop,video:video?[video.videoWidth,video.videoHeight]:null,out:lastOut,light:light,model:model,base:base,fps:fpsM.fps,inferMs:inferMs,lowRate:lowRate,score:score}}
   };
 })();
