@@ -272,7 +272,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     t.push("읽는 방법 "+(usedCrop?"얼굴을 잘라 확대 ("+r(crop.w)+"px 를 "+cropCv.width+"px 로)":"화면 전체"));
     if(!m){t.push("얼굴이 보이지 않습니다");}
     else{
-      var q=C.quality({irisPx:m.irisPx,fps:fps.fps,light:null});
+      var q=C.quality({irisPx:m.irisPx,fps:0,light:null});   /* 홍채 크기만 봅니다 */
       t.push("홍채 "+m.irisPx.toFixed(1)+"px ("+(q.level==="good"?"충분":(q.level==="low"?"부족":"9칸 구분 어려움"))+") · 두 눈 "+(m.eyes===2?"보임":"한쪽만"));
       t.push("얼굴 너비 "+r((m.box.x1-m.box.x0)*video.videoWidth)+"px (영상의 "+r((m.box.x1-m.box.x0)*100)+"%)");
       t.push("거리 "+r(m.distCm)+"cm (화각 "+$("hfov").value+"° 가정)");
