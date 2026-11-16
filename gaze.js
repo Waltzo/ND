@@ -32,10 +32,14 @@
   var col=new C.Collector(),calIdx=0,calSamples=[],calMs=[],calC=[],calLost=null;
   var tracker=null,mover=null,ear=new C.EarCloser();
   var resultT=0;
+  /* 품질, 진단, 정확도 확인 */
+  var fpsM=new C.FpsMeter(),inferMs=0,frames=0,lowRate=false;
+  var lastOut=null,qualAt=0,qualMsg="",qualSince=0;
+  var ver={idx:0,t0:0,zones:[],hits:0,redo:false},score=null;
 
   /* 보호자 설정(깜빡임, 호출음). 이 기기에 저장합니다. */
   var SETKEY="nundam-gaze-set";
-  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3};
+  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3,diag:false};
   try{
     var savedOpt=JSON.parse(localStorage.getItem(SETKEY));
     if(savedOpt)for(var ok in opt)if(typeof savedOpt[ok]===typeof opt[ok])opt[ok]=savedOpt[ok];
@@ -63,6 +67,15 @@
     '<div class="gz__dot" hidden><b></b></div>'+
     '<div class="gz__cap" hidden></div>';
   stage.appendChild(ov);
+  /* 쓰는 중에 뜨는 품질 안내, 진단 표시 */
+  var chip=document.createElement("div");
+  chip.className="gz-chip";chip.hidden=true;chip.setAttribute("role","status");
+  stage.appendChild(chip);
+  var diag=document.createElement("div");
+  diag.className="gz-diag";diag.hidden=true;
+  diag.innerHTML='<canvas width="240" height="180" aria-hidden="true"></canvas><pre></pre>';
+  document.body.appendChild(diag);
+  var diagCv=diag.firstChild,diagTx=diag.lastChild;
   var ui={
     view:ov.querySelector(".gz__view"),msg:ov.querySelector(".gz__msg"),list:ov.querySelector(".gz__list"),
     bar:ov.querySelector(".gz__bar"),sub:ov.querySelector(".gz__sub"),quit:ov.querySelector(".btn"),
@@ -89,17 +102,34 @@
     lastSaid=msg;saidAt=now;N.speak(msg);
   }
 
-  /* 카메라 영상을 거울처럼 뒤집어 그립니다. */
-  function drawView(cv,m){
-    if(!video||!video.videoWidth)return;
-    var w=cv.width,h=Math.round(w*video.videoHeight/video.videoWidth);
+  /* 카메라 영상을 거울처럼 뒤집어 그리고, 그 위에 얼굴 테두리(eyes면 눈 테두리와 홍채 점)를 얹습니다. */
+  function drawView(cv,m,eyes){
+    var vw=video&&video.videoWidth?video.videoWidth:640,vh=video&&video.videoWidth?video.videoHeight:480;
+    var w=cv.width,h=Math.round(w*vh/vw),g=cv.getContext("2d");
     if(cv.height!==h)cv.height=h;
-    var g=cv.getContext("2d");
-    g.save();g.scale(-1,1);g.drawImage(video,-w,0,w,h);g.restore();
-    if(!m)return null;
+    if(video&&video.videoWidth){g.save();g.scale(-1,1);g.drawImage(video,-w,0,w,h);g.restore();}
+    else{g.fillStyle=cssVar("--surface");g.fillRect(0,0,w,h);}
+    if(!m)return;
+    var k=w/vw;
     g.lineWidth=2;g.strokeStyle=cssVar("--accent");
-    g.strokeRect(m.box.x0*w,m.box.y0*h,(m.box.x1-m.box.x0)*w,(m.box.y1-m.box.y0)*h);
-    return g;
+    if(!eyes){g.strokeRect(m.box.x0*w,m.box.y0*h,(m.box.x1-m.box.x0)*w,(m.box.y1-m.box.y0)*h);return;}
+    [m.R,m.L].forEach(function(e){
+      g.beginPath();g.moveTo(e.a.x*k,e.a.y*k);g.lineTo(e.up.x*k,e.up.y*k);g.lineTo(e.b.x*k,e.b.y*k);g.lineTo(e.low.x*k,e.low.y*k);g.closePath();g.stroke();
+    });
+    g.fillStyle=cssVar("--signal");
+    [m.R,m.L].forEach(function(e){g.beginPath();g.arc(e.iris.x*k,e.iris.y*k,3,0,Math.PI*2);g.fill();});
+  }
+  function showDiag(m){
+    diag.hidden=!(opt.diag&&mode!=="off"&&mode!=="loading");
+    if(diag.hidden)return;
+    drawView(diagCv,m,true);
+    var z=mode==="run"&&lastOut&&lastOut.zone?lastOut.zone:"-",r=Math.round;
+    diagTx.textContent=m?
+      "거리 "+r(m.distCm)+"cm · 홍채 "+m.irisPx.toFixed(1)+"px\n"+
+      "좌우 "+r(m.yaw)+"° 상하 "+r(m.pitch)+"° 기울임 "+r(m.roll)+"°\n"+
+      "초당 "+r(fpsM.fps)+"회"+(lowRate?" (낮춤)":"")+" · 밝기 "+(light==null?"-":r(light))+"\n"+
+      "보는 칸 "+z+(score==null?"":" · 정확도 "+score+" / 9")
+      :"얼굴이 보이지 않습니다";
   }
 
   /* ---------- 카메라와 모델 ---------- */
@@ -176,6 +206,7 @@
     }).then(function(){
       if(id!==runId)return;
       lastVT=-1;lastInfer=0;errors=0;light=null;
+      fpsM=new C.FpsMeter();inferMs=0;frames=0;lowRate=false;minGap=0;
       enterPosture();
       requestAnimationFrame(loop);
     }).catch(function(err){
@@ -184,7 +215,7 @@
   }
   function stop(){
     runId++;mode="off";clearTimeout(resultT);
-    release();screen(null);
+    release();screen(null);chip.hidden=true;diag.hidden=true;
     N.setGaze(null);N.lock(false);
   }
   function fail(msg){
@@ -236,6 +267,11 @@
     var res=null;
     try{res=landmarker.detectForVideo(video,now);errors=0;}
     catch(err){if(++errors>30){fail("얼굴 인식이 멈췄습니다.");}return;}
+    /* 실제 속도를 재서, 느린 기기에서는 모델 실행을 초당 15회쯤으로 낮춥니다. */
+    var took=performance.now()-now;
+    inferMs=inferMs?inferMs*0.9+took*0.1:took;
+    fpsM.update(now);
+    if(!lowRate&&++frames>=60&&C.needsLowRate(inferMs,fpsM.fps)){lowRate=true;minGap=62;}
     var m=read(res);
     lastM=m;
     measureLight(m,now);
@@ -253,15 +289,17 @@
   }
   function onFrame(m,now){
     watchEyes(m,now);
+    showDiag(m);
     if(mode==="posture")stepPosture(m,now);
     else if(mode==="calib")stepCalib(m,now);
     else if(mode==="quick")stepQuick(m,now);
+    else if(mode==="verify")stepVerify(m,now);
     else if(mode==="run")stepRun(m,now);
   }
 
   /* ---------- 자세 점검 ---------- */
   function enterPosture(){
-    mode="posture";N.lock(true);N.setGaze(null);
+    mode="posture";N.lock(true);N.setGaze(null);chip.hidden=true;
     gate=new C.HoldGate(1000);lastSaid="";pendMsg="";
     screen("posture");
     ui.sub.textContent="모두 맞으면 저절로 다음으로 넘어갑니다.";
@@ -351,7 +389,50 @@
     saveCal();
     afterCalib();
   }
-  function afterCalib(){enterRun();}
+  function afterCalib(){enterVerify(true);}
+
+  /* ---------- 정확도 확인: 9칸을 다시 보고 맞힌 칸을 셉니다 ---------- */
+  function enterVerify(afterCal){
+    mode="verify";N.lock(true);N.setGaze(null);chip.hidden=true;
+    tracker=new C.Tracker({model:model,blink:{alarmMs:0}});
+    ver={idx:0,t0:0,zones:[],hits:0,redo:!!afterCal&&!ver.redone,redone:ver.redone};
+    screen("calib");
+    target(ORDER[0],"정확도를 확인합니다. 점을 보고 계세요 (1 / 9)");
+    ver.t0=performance.now();
+    N.speak("정확도를 확인합니다. 점을 따라 보세요");
+  }
+  function stepVerify(m,now){
+    if(lostTooLong(m,now)){enterPosture();return;}
+    var out=tracker.step(m,now),el=now-ver.t0;
+    lastOut=out;
+    if(el>800)ver.zones.push(out.zone);          /* 눈을 옮길 시간은 빼고 */
+    ui.dot.style.setProperty("--p",Math.min(1,el/1800));
+    if(el<1800)return;
+    if(C.majority(ver.zones)===ORDER[ver.idx])ver.hits++;
+    ver.zones=[];ver.t0=now;
+    if(++ver.idx<ORDER.length){
+      target(ORDER[ver.idx],"정확도를 확인합니다. 점을 보고 계세요 ("+(ver.idx+1)+" / 9)");
+      return;
+    }
+    score=ver.hits;
+    mode="result";screen("result");
+    ui.msg.textContent="맞힌 칸 "+score+" / 9";
+    /* 환자는 누를 수 없으므로, 많이 틀리면 한 번은 저절로 다시 보정합니다. */
+    var again=ver.redo&&score<5;
+    ui.sub.textContent=again?"잘 맞지 않아 다시 보정합니다.":
+      (score>=7?"잘 맞습니다. 곧 자판으로 넘어갑니다.":"잘 맞지 않으면 보호자 설정에서 다시 보정을 눌러 주세요.");
+    N.speak("아홉 칸 중 "+score+"칸을 맞혔습니다");
+    resultT=setTimeout(function(){
+      if(mode!=="result")return;
+      if(again){ver.redone=true;wantFull=true;enterPosture();}
+      else enterRun();
+    },4000);
+  }
+  function verifyNow(){
+    if(!model||mode==="off"||mode==="loading")return;
+    clearTimeout(resultT);
+    N.closeSettings();ver.redone=true;enterVerify(false);
+  }
 
   /* 빠른 재보정: 가운데 한 점만 보고 치우침을 고칩니다. */
   function enterQuick(){
@@ -373,7 +454,7 @@
   function recalibrate(){
     if(mode==="off"||mode==="loading")return;
     clearTimeout(resultT);
-    wantFull=true;tries=0;N.closeSettings();enterPosture();
+    wantFull=true;tries=0;ver.redone=false;N.closeSettings();enterPosture();
   }
 
   /* ---------- 쓰는 중 ---------- */
@@ -385,13 +466,27 @@
   }
   function stepRun(m,now){
     var out=tracker.step(m,now);
+    lastOut=out;
     N.setGaze(out.pt,out.zone);
     if(out.blink)N.blink();
     /* 태블릿이 옮겨진 것 같으면 입력을 잠그고 자세부터 다시 봅니다. */
     if(mover.update(m,now)){
       N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
       enterPosture();
+      return;
     }
+    checkQuality(m,now);
+  }
+  /* 카메라 품질이 나쁘면 자판 위쪽에 안내를 띄웁니다. 환자가 말하는 중일 수 있어 소리로는 읽지 않습니다. */
+  function checkQuality(m,now){
+    if(!m||now-qualAt<1000)return;
+    qualAt=now;
+    var q=C.quality({irisPx:m.irisPx,fps:sim?0:fpsM.fps,light:light});
+    var msg=q.level==="bad"?"카메라가 흐려 칸을 가리기 어렵습니다. "+(q.msg||"조금 더 가까이 놓아 주세요"):q.msg;
+    if(msg!==qualMsg){qualMsg=msg;qualSince=now;}
+    var show=!!msg&&now-qualSince>=2000;       /* 잠깐 나빠진 것은 넘어갑니다 */
+    if(chip.hidden===show){chip.hidden=!show;}
+    if(show&&chip.textContent!==msg)chip.textContent=msg;
   }
 
   /* 시험용: 카메라 대신 측정값을 직접 넣습니다(start({sim:true}) 로 켰을 때만). */
@@ -399,8 +494,13 @@
     if(!sim||mode==="off")return;
     lastM=m;onFrame(m,performance.now());
   }
-  var recalBtn=document.getElementById("recalBtn");
+  var recalBtn=document.getElementById("recalBtn"),verifyBtn=document.getElementById("verifyBtn"),diagChk=document.getElementById("diagChk");
   if(recalBtn)recalBtn.addEventListener("click",recalibrate);
+  if(verifyBtn)verifyBtn.addEventListener("click",verifyNow);
+  if(diagChk){
+    diagChk.checked=opt.diag;
+    diagChk.addEventListener("change",function(){opt.diag=diagChk.checked;saveOpt();if(!opt.diag)diag.hidden=true;});
+  }
 
   /* 설정 창의 조절 막대 */
   function slider(id,key,fmt){
@@ -417,9 +517,9 @@
   applyOpt();
 
   window.NundamGaze={
-    start:start,stop:stop,recalibrate:recalibrate,feed:feed,
+    start:start,stop:stop,recalibrate:recalibrate,verify:verifyNow,feed:feed,
     mode:function(){return mode},
     /* 진단과 시험용: 지금 상태를 그대로 보여 줍니다 */
-    debug:function(){return {mode:mode,m:lastM,light:light,model:model,base:base}}
+    debug:function(){return {mode:mode,m:lastM,out:lastOut,light:light,model:model,base:base,fps:fpsM.fps,inferMs:inferMs,lowRate:lowRate,score:score}}
   };
 })();

@@ -148,6 +148,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .gz__dot b{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--signal);border:3px solid var(--bg)}
 .gz__dot b::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink)}
 .gz__cap{position:absolute;left:0;right:0;bottom:8px;font-size:clamp(16px,3vmin,24px);font-weight:500}
+.gz-chip{position:absolute;left:50%;top:4px;transform:translateX(-50%);z-index:2;pointer-events:none;width:max-content;max-width:92%;background:var(--ink);color:var(--bg);border-radius:999px;padding:4px 14px;font-size:15px;font-weight:500}
+.gz-chip[hidden],.gz-diag[hidden]{display:none}
+.gz-diag{position:fixed;left:8px;bottom:8px;z-index:6;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.gz-diag canvas{width:200px;height:auto;border-radius:6px;background:var(--bg)}
+.gz-diag pre{margin:0;font-family:var(--font-num);font-size:11px;line-height:1.45;white-space:pre}
 .gz-video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
 
 /* 알림: 카메라를 못 쓸 때처럼 보호자에게 알릴 말 */
@@ -238,9 +243,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <p>카메라는 얼굴을 보고 시선과 깜빡임을 읽습니다. 영상은 이 기기 안에서만 쓰고, 어디에도 보내거나 저장하지 않습니다.</p>
   </div>
   <div class="field" data-input="camera">
-    <div class="row"><button class="btn" id="recalBtn" type="button">다시 보정</button></div>
+    <div class="row">
+      <button class="btn" id="recalBtn" type="button">다시 보정</button>
+      <button class="btn" id="verifyBtn" type="button">정확도 확인</button>
+    </div>
     <p>태블릿을 옮기면 자세를 다시 확인하고 가운데 한 점만 보면 됩니다. 그래도 잘 맞지 않으면 다시 보정을 누르세요. 9칸을 차례로 봅니다.</p>
   </div>
+  <label class="check" data-input="camera" for="diagChk"><input type="checkbox" id="diagChk">진단 표시 (카메라 영상과 측정값)</label>
   <h2 data-input="camera">깜빡임과 호출음</h2>
   <div class="field" data-input="camera">
     <label class="field__top" for="blinkMin"><span>깜빡임으로 치는 가장 짧은 시간</span><output id="blinkMinOut">0.20초</output></label>
