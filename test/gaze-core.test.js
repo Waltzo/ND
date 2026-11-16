@@ -264,12 +264,30 @@ test("너무 오래 감으면 입력을 멈추고, 3초에 호출음",function()
   var tr=tracker(),t={v:0,log:[]};
   look(tr,5,500,t);t.log=[];
   look(tr,5,3500,t,{closed:0.95});
+  assert.ok(t.log[Math.floor(2000/33)].pt,"길게 깜빡임 시간(2.5초)까지는 칸을 유지");
   assert.strictEqual(t.log[t.log.length-1].pt,null);
   assert.strictEqual(t.log[t.log.length-1].why,"closed");
   assert.strictEqual(t.log.filter(function(o){return o.alarm}).length,1);
   t.log=[];look(tr,5,500,t);
   assert.strictEqual(t.log.filter(function(o){return o.blink}).length,0,"길게 감은 것은 깜빡임이 아닙니다");
   assert.strictEqual(t.log[t.log.length-1].zone,5,"눈을 뜨면 다시 이어집니다");
+});
+test("길게 감았다 뜨면 길게 깜빡임 한 번, 칸은 감기 직전 그대로",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  look(tr,2,600,t);t.log=[];
+  var mid=look(tr,7,1800,t,{closed:0.95});
+  assert.ok(mid.pt,"길게 감는 동안에도 칸을 붙들고 있어야 합니다");assert.strictEqual(mid.zone,2);
+  look(tr,2,400,t);
+  var longs=t.log.filter(function(o){return o.long});
+  assert.strictEqual(longs.length,1);assert.strictEqual(longs[0].zone,2);
+  assert.strictEqual(t.log.filter(function(o){return o.blink}).length,0,"보통 깜빡임으로는 치지 않습니다");
+  /* 보통 깜빡임은 길게 깜빡임이 아닙니다 */
+  t.log=[];look(tr,2,400,t,{closed:0.95});look(tr,2,400,t);
+  assert.strictEqual(t.log.filter(function(o){return o.long}).length,0);
+  assert.strictEqual(t.log.filter(function(o){return o.blink}).length,1);
+  /* 너무 오래(2.5초 넘게) 감은 것도 아닙니다 */
+  t.log=[];look(tr,2,2900,t,{closed:0.95});look(tr,2,400,t);
+  assert.strictEqual(t.log.filter(function(o){return o.long}).length,0);
 });
 test("얼굴을 놓치면 입력을 멈춘다",function(){
   var tr=tracker(),t={v:0};

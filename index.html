@@ -274,7 +274,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <div class="field" data-input="camera">
     <label class="field__top" for="blinkMax"><span>깜빡임으로 치는 가장 긴 시간</span><output id="blinkMaxOut">1.0초</output></label>
     <input type="range" id="blinkMax" min="0.5" max="2" step="0.1" value="1">
-    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다.</p>
+    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다. 다만 지우기 칸에서는 이보다 길게(2.5초까지) 감았다 뜨면 글자 하나를 통째로 지웁니다.</p>
   </div>
   <div class="field" data-input="camera">
     <label class="field__top" for="eyeAlarm"><span>눈을 오래 감으면 호출음</span><output id="eyeAlarmOut">3초</output></label>
@@ -306,6 +306,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <ol>
       <li>묶음 칸의 작은 9칸은 열었을 때 글자가 놓이는 자리입니다.</li>
       <li>자음은 글자를 확인하면 바로 입력되고 처음 화면으로 돌아옵니다.</li>
+      <li>지우기 칸은 확인하면 낱자 하나를, 눈을 길게 감았다 뜨면 글자 하나를 통째로 지웁니다. 마우스는 0.6초 넘게 눌렀다 뗍니다.</li>
       <li>모음은 글자를 고른 뒤 입력 칸을 확인해야 들어갑니다. ㅗ, ㅏ, 입력은 ㅘ.</li>
       <li>쌍자음 칸을 확인하면 ㄱ은 ㄲ, ㅏ는 ㅑ, ㅗ는 ㅛ처럼 바뀝니다.</li>
       <li>ㅐ는 ㅏ ㅣ, ㅔ는 ㅓ ㅣ, ㅢ는 ㅡ ㅣ, ㅝ는 ㅜ ㅓ 순서로 고릅니다.</li>
@@ -390,7 +391,7 @@ function compose(list){
 
   function mainMap(){
     var m={1:{type:"words",kind:"W",label:"자주 쓰는 단어",sub:"8개"},
-           2:{type:"back",kind:"F",label:"지우기",sub:"한 글자씩"},
+           2:{type:"back",kind:"F",label:"지우기",sub:"확인: 낱자 · 길게 감기: 한 글자"},
            3:{type:"genie",kind:"S",label:S.wake,sub:"쓴 말을 기가지니에게"},
            4:{type:"num",kind:"N"},
            5:{type:"input"},
@@ -468,11 +469,24 @@ function compose(list){
   }
   stage.addEventListener("pointermove",setRaw);
   stage.addEventListener("pointerleave",function(){if(S.input==="mouse")raw=null});
-  stage.addEventListener("pointerdown",function(e){if(S.input!=="mouse")return;setRaw(e);blink()});
+  /* 마우스나 스페이스바를 0.6초 넘게 눌렀다 떼면 길게 깜빡임을 대신합니다 */
+  var downAt=0;
+  stage.addEventListener("pointerdown",function(e){if(S.input!=="mouse")return;setRaw(e);downAt=performance.now();blink()});
+  window.addEventListener("pointerup",function(){
+    if(S.input==="mouse"&&downAt&&performance.now()-downAt>=600)longBlink();
+    downAt=0;
+  });
   window.addEventListener("keydown",function(e){
     if(e.code!=="Space"||S.input!=="mouse")return;
     var t=e.target.tagName;if(t==="BUTTON"||t==="INPUT")return;
-    e.preventDefault();blink();
+    e.preventDefault();
+    if(e.repeat)return;
+    downAt=performance.now();blink();
+  });
+  window.addEventListener("keyup",function(e){
+    if(e.code!=="Space"||S.input!=="mouse")return;
+    if(downAt&&performance.now()-downAt>=600)longBlink();
+    downAt=0;
   });
   /* ----- 조이스틱 방식 ----- */
   /* 시선을 가운데(5), 위(2), 아래(8), 왼쪽(4), 오른쪽(6) 다섯 가지로만 읽습니다. */
@@ -541,6 +555,26 @@ function compose(list){
     var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw)),now=performance.now();
     if(firstBlink&&firstZone===z&&now-firstBlink<S.gap*1000){firstBlink=0;confirm(z);}
     else{firstBlink=now;firstZone=z;tick(660,0.04);}
+  }
+
+  /* 지우기 칸을 보면서 눈을 길게 감았다 뜨면 한 글자(낱자가 아니라 글자 하나)를 통째로 지웁니다. */
+  function longBlink(){
+    if(!raw||dlg.open||locked)return;
+    var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw));
+    if(S.nav==="joy"&&z!==5)return;          /* 조이스틱에서는 가운데에 온 칸만 */
+    var sz=slot(z),d=sz?cur[sz]:null;
+    if(!d||d.type!=="back")return;
+    firstBlink=0;
+    var text=compose(list);
+    if(!text){say("지울 글자가 없습니다");}
+    else{
+      var want=text.slice(0,-1);
+      do{list.pop();}while(list.length&&compose(list)!==want);
+      say("한 글자를 통째로 지웠습니다");
+    }
+    armed=false;dwellT=0;
+    render();tick(660,0.2);
+    var t=tiles[sz];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
 
   /* 소리 */
@@ -617,7 +651,7 @@ function compose(list){
       view=null;say(d.text+" 넣었습니다");
     }
     else if(d.type==="back"){
-      if(list.length){list.pop();say("한 글자 지웠습니다");}else say("지울 글자가 없습니다");
+      if(list.length){list.pop();say("낱자 하나를 지웠습니다");}else say("지울 글자가 없습니다");
     }
     else if(d.type==="genie"){
       /* 호출어를 먼저 말하고, 기가지니가 들을 준비를 할 시간을 둔 뒤 명령을 말합니다 */
@@ -770,6 +804,7 @@ function compose(list){
       raw={x:pt.x*W,y:pt.y*H};camZone=z||null;
     },
     blink:function(){if(S.input==="camera")blink()},
+    longBlink:function(){if(S.input==="camera")longBlink()},
     lock:function(on){locked=!!on;if(locked){raw=null;camZone=null;firstBlink=0;}},
     setInput:setInput,notice:notice,
     setNav:function(v){var b=document.querySelector('#navSeg [data-v="'+v+'"]');if(b)b.click();},speak:speak,tick:tick,alarm:alarm,

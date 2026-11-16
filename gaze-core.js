@@ -262,6 +262,7 @@
     this.fx=new OneEuro(0.6,0.5);this.fy=new OneEuro(0.6,0.5);
     this.ear=new EarCloser();
     this.settleMs=o.settleMs==null?120:o.settleMs;
+    this.longMs=o.longMs==null?2500:o.longMs;   /* 길게 깜빡임으로 치는 가장 긴 시간 */
     this.reset();
   }
   Tracker.prototype.reset=function(){
@@ -275,10 +276,11 @@
     return clamp((c-c0)/(1-c0),0,1);
   };
   /* m: measure() 결과 또는 null. t: ms.
-     돌려주는 값 {pt:{x,y}|null, zone, blink, alarm, closed, why}
+     돌려주는 값 {pt:{x,y}|null, zone, blink, long, alarm, closed, why}
+     long: 깜빡임보다 길게(maxMs 초과, longMs 이하) 감았다 떴음
      pt가 null이면 입력을 멈춰야 합니다. why: face 얼굴 놓침, closed 눈 감음, model 보정 없음, away 화면 밖 */
   Tracker.prototype.step=function(m,t){
-    var out={pt:null,zone:null,blink:false,alarm:false,closed:false,why:""};
+    var out={pt:null,zone:null,blink:false,long:false,alarm:false,closed:false,why:""};
     if(!m){
       if(this.lostSince===null)this.lostSince=t;
       if(t-this.lostSince>1000){var keep=this.lostSince;this.reset();this.lostSince=keep;}
@@ -287,9 +289,13 @@
     this.lostSince=null;
     var c=this.closedOf(m),b=this.blink.update(c,t);
     out.blink=b.blink;out.alarm=b.alarm;out.closed=b.closed;
-    if(b.opened)this.settleUntil=t+this.settleMs;
+    if(b.opened){
+      this.settleUntil=t+this.settleMs;
+      out.long=b.dur>this.blink.maxMs&&b.dur<=this.longMs&&!!this.lastPt;
+    }
     /* 감는 동안, 반쯤 감긴 동안, 막 뜬 직후에는 홍채가 흔들리므로 감기 직전 칸을 유지합니다. */
-    if(b.closed&&b.dur>this.blink.maxMs){out.why="closed";return out;}
+    /* 길게 깜빡임을 읽으려면 그 시간까지는 감기 직전 칸을 붙들고 있어야 합니다. */
+    if(b.closed&&b.dur>Math.max(this.blink.maxMs,this.longMs)){out.why="closed";return out;}
     /* 눈꺼풀이 반쯤 내려온 채로 오래 있으면(졸림, 눈꺼풀 처짐) 마지막 칸에 붙들어 두지 않고 멈춥니다. */
     if(!b.closed&&c>=this.blink.off){
       if(this.halfSince===null)this.halfSince=t;

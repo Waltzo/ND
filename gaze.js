@@ -47,10 +47,12 @@
   }catch(err){}
   function saveOpt(){try{localStorage.setItem(SETKEY,JSON.stringify(opt));}catch(err){}}
   var alarmDet=new C.BlinkDetector({alarmMs:opt.alarm*1000});
+  /* 길게 깜빡임은 2.5초까지. 호출음이 그보다 먼저 울리게 해 두었으면 그 직전까지 */
+  function longMs(){return opt.alarm>0?Math.min(2500,opt.alarm*1000-200):2500}
   function applyOpt(){
     if(opt.blinkMax<opt.blinkMin+0.1)opt.blinkMax=opt.blinkMin+0.1;
     alarmDet.alarmMs=opt.alarm*1000;
-    if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;}
+    if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;tracker.longMs=longMs();}
   }
 
   /* ---------- 화면 ---------- */
@@ -489,7 +491,7 @@
   /* ---------- 쓰는 중 ---------- */
   function enterRun(){
     mode="run";
-    tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0}});
+    tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
   }
@@ -498,6 +500,7 @@
     lastOut=out;
     N.setGaze(out.pt,out.zone);
     if(out.blink)N.blink();
+    if(out.long)N.longBlink();
     /* 태블릿이 옮겨진 것 같으면 입력을 잠그고 자세부터 다시 봅니다. */
     if(mover.update(m,now)){
       N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
