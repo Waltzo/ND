@@ -93,7 +93,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     </div>
     <div class="ctl">
       <button class="btn" id="cropBtn" type="button" aria-pressed="true">얼굴을 잘라 확대해서 읽기</button>
-      <button class="btn" id="pixBtn" type="button" aria-pressed="true">눈 그림: 실제 픽셀 그대로</button>
+      <button class="btn" id="pixBtn" type="button" aria-pressed="false">눈 그림: 모델이 읽는 확대 그림</button>
       <button class="btn" id="copyBtn" type="button">값 복사</button>
     </div>
     <p class="note">얼굴을 잘라 확대해서 읽기: 화면 전체에서 얼굴을 찾은 뒤, 다음부터는 얼굴을 한가운데 두고 얼굴 너비가 500px 이 되게 키워서 눈을 읽습니다. 얼굴이 작게 찍힐 때 놓치지 않는지 볼 수 있습니다.</p>
@@ -121,7 +121,9 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
   video.muted=true;video.playsInline=true;video.setAttribute("playsinline","");video.setAttribute("aria-hidden","true");
   document.body.appendChild(video);
   var stream=null,track=null,landmarker=null,vision=null;
-  var opt={crop:true,pixel:true};
+  var opt={crop:true,pixel:false};   /* pixel: 눈 그림을 확대 전 원본 픽셀로 보기 */
+  var inReg=null;                    /* cropCv 에 지금 들어 있는 모델 입력의 범위와 배율 {x,y,w,h,k} */
+  var flushCv=document.createElement("canvas");
   var crop=null;                 /* 잘라 넣는 범위(원본 영상 픽셀): {x,y,w,h} */
   var cropCv=document.createElement("canvas"),miss=0,usedCrop=false;
   var lastVT=-1,fps=new C.FpsMeter(),inferMs=0,lastM=null,blinkIdx=null,openId=0;
@@ -175,6 +177,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     $(id).addEventListener("click",function(){opt[key]=!opt[key];this.setAttribute("aria-pressed",opt[key]);if(key==="crop")crop=null;});
   }
   toggle("cropBtn","crop");toggle("pixBtn","pixel");
+  $("pixBtn").addEventListener("click",function(){this.textContent=opt.pixel?"눈 그림: 확대 전 원본 픽셀":"눈 그림: 모델이 읽는 확대 그림";});
   $("copyBtn").addEventListener("click",function(){
     var t=info.textContent+"\n"+eyeTx.textContent,b=this;
     function done(ok){b.textContent=ok?"복사했습니다":"복사하지 못했습니다";setTimeout(function(){b.textContent="값 복사"},1500);}
@@ -213,8 +216,9 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     var vw=video.videoWidth,vh=video.videoHeight,src=video,c=null,g2=cropCv.getContext("2d");
     if(flush){
       /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
-      flush=false;cropCv.width=64;cropCv.height=64;g2.fillStyle="#808080";g2.fillRect(0,0,64,64);
-      landmarker.detectForVideo(cropCv,now);
+      flush=false;flushCv.width=64;flushCv.height=64;
+      var gf=flushCv.getContext("2d");gf.fillStyle="#808080";gf.fillRect(0,0,64,64);
+      landmarker.detectForVideo(flushCv,now);
       return lastM;
     }
     if(opt.crop){
@@ -232,7 +236,8 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
       g2.fillStyle="#808080";g2.fillRect(0,0,cropCv.width,cropCv.height);   /* 영상 밖은 회색 */
       if(sx1>sx0&&sy1>sy0)g2.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-c.x)*k,(sy0-c.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
       src=cropCv;
-    }
+      inReg=c===crop?{x:c.x,y:c.y,w:c.w,h:c.h,k:k}:null;
+    }else inReg=null;
     var res=landmarker.detectForVideo(src,now),lm=res.faceLandmarks&&res.faceLandmarks[0],m=null;
     if(lm){
       if(c)lm=lm.map(function(p){return {x:(c.x+p.x*c.w)/vw,y:(c.y+p.y*c.h)/vh,z:p.z}});
@@ -258,16 +263,12 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
       note.textContent=opt.crop?"얼굴을 찾으면 여기에 보입니다.":"얼굴을 잘라 확대해서 읽기가 꺼져 있습니다.";
       return;
     }
-    var vw=video.videoWidth,c=crop,W=cv.width,k=W/c.w;
+    if(!inReg)return;                                  /* 추적을 지우는 프레임: 직전 그림을 그대로 둡니다 */
+    var vw=video.videoWidth,c=inReg,W=cv.width,k=W/c.w;
     if(cv.height!==W)cv.height=W;
-    g.fillStyle="#808080";g.fillRect(0,0,W,W);
-    var sx0=Math.max(0,c.x),sy0=Math.max(0,c.y),sx1=Math.min(vw,c.x+c.w),sy1=Math.min(video.videoHeight,c.y+c.h);
-    g.imageSmoothingEnabled=!opt.pixel;
-    if(sx1>sx0&&sy1>sy0){
-      g.save();g.translate(W,0);g.scale(-1,1);
-      g.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-c.x)*k,(sy0-c.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
-      g.restore();
-    }
+    /* 모델에 넣은 그림(cropCv)을 그대로 뒤집어 옮깁니다 */
+    g.imageSmoothingEnabled=true;
+    g.save();g.translate(W,0);g.scale(-1,1);g.drawImage(cropCv,0,0,cropCv.width,cropCv.height,0,0,W,W);g.restore();
     var ox=vw-c.x-c.w;
     function X(x){return (x-ox)*k}
     function Y(y){return (y-c.y)*k}
@@ -277,7 +278,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     });
     g.strokeStyle=cssVar("--signal");
     [m.R,m.L].forEach(function(e){g.beginPath();g.arc(X(e.iris.x),Y(e.iris.y),Math.max(2,e.irisPx*k/2),0,Math.PI*2);g.stroke();});
-    note.textContent="원본 얼굴 너비 "+Math.round(c.fw)+"px 를 "+Math.round(c.fw*c.scale)+"px 로 ("+c.scale.toFixed(1)+"배) 키워 모델에 넣습니다. 모델 입력 "+cropCv.width+" x "+cropCv.height;
+    note.textContent="원본 얼굴 너비 "+Math.round(crop.fw)+"px 를 "+Math.round(crop.fw*c.k)+"px 로 ("+c.k.toFixed(1)+"배) 키워 모델에 넣습니다. 모델 입력 "+cropCv.width+" x "+cropCv.height;
   }
   function drawView(m){
     var vw=video.videoWidth,vh=video.videoHeight,w=view.width,h=Math.round(w*vh/vw),g=view.getContext("2d");
@@ -293,14 +294,17 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     g.fillStyle=cssVar("--bg");g.fillRect(0,0,W,H);
     if(!m){eyeTx.textContent="눈을 찾는 중";return;}
     var eyes=[m.L,m.R],half=W/2,lines=[];
-    g.imageSmoothingEnabled=!opt.pixel;
+    /* 모델이 읽는 확대 그림에서 눈을 잘라 보여 줍니다. 단추를 누르면 확대 전 원본 픽셀을 네모 그대로 보여 줍니다. */
+    var R=!opt.pixel&&usedCrop?inReg:null;
+    g.imageSmoothingEnabled=!!R;
     eyes.forEach(function(e,i){
       var sw=e.w*2.2,sh=sw*H/half,k=half/sw;            /* 눈 너비의 2.2배를 한 칸 폭에 */
       var mx0=e.c.x-sw/2,my0=e.c.y-sh/2;                /* 뒤집은 좌표에서의 왼쪽 위 */
       g.save();
       g.beginPath();g.rect(i*half,0,half,H);g.clip();
       g.translate(i*half+half,0);g.scale(-1,1);          /* 원본을 뒤집어 그림 */
-      g.drawImage(video,vw-mx0-sw,my0,sw,sh,0,0,half,H);
+      if(R)g.drawImage(cropCv,(vw-mx0-sw-R.x)*R.k,(my0-R.y)*R.k,sw*R.k,sh*R.k,0,0,half,H);
+      else g.drawImage(video,vw-mx0-sw,my0,sw,sh,0,0,half,H);
       g.restore();
       function px(p){return {x:i*half+(p.x-mx0)*k,y:(p.y-my0)*k}}
       var a=px(e.a),b=px(e.b),up=px(e.up),low=px(e.low),ir=px(e.iris);
@@ -309,7 +313,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
       g.strokeStyle=cssVar("--signal");
       g.beginPath();g.arc(ir.x,ir.y,e.irisPx*k/2,0,Math.PI*2);g.stroke();
       g.fillStyle=cssVar("--signal");g.beginPath();g.arc(ir.x,ir.y,4,0,Math.PI*2);g.fill();
-      lines.push((i?"오른쪽":"왼쪽")+" 눈(화면 기준)\n 홍채 "+e.irisPx.toFixed(1)+"px · 눈 너비 "+e.w.toFixed(0)+"px\n 좌우 "+e.hx.toFixed(3)+" 상하 "+e.hy.toFixed(3)+"\n 확대 "+k.toFixed(1)+"배");
+      lines.push((i?"오른쪽":"왼쪽")+" 눈(화면 기준)\n 홍채 원본 "+e.irisPx.toFixed(1)+"px"+(inReg&&usedCrop?" · 모델 입력 "+(e.irisPx*inReg.k).toFixed(0)+"px":"")+"\n 눈 너비 원본 "+e.w.toFixed(0)+"px\n 좌우 "+e.hx.toFixed(3)+" 상하 "+e.hy.toFixed(3)+"\n 확대 "+k.toFixed(1)+"배");
     });
     g.strokeStyle=cssVar("--line");g.lineWidth=2;g.beginPath();g.moveTo(half,0);g.lineTo(half,H);g.stroke();
     eyeTx.textContent=lines.join("\n");
@@ -325,7 +329,8 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     if(!m){t.push("얼굴이 보이지 않습니다");}
     else{
       var q=C.quality({irisPx:m.irisPx,fps:0,light:null});   /* 홍채 크기만 봅니다 */
-      t.push("홍채 "+m.irisPx.toFixed(1)+"px ("+(q.level==="good"?"충분":(q.level==="low"?"부족":"9칸 구분 어려움"))+") · 두 눈 "+(m.eyes===2?"보임":"한쪽만"));
+      if(usedCrop&&inReg)t.push("모델 입력에서 홍채 "+r(m.irisPx*inReg.k)+"px, 얼굴 "+r(crop.fw*inReg.k)+"px ("+inReg.k.toFixed(1)+"배 확대)");
+      t.push("원본 홍채 "+m.irisPx.toFixed(1)+"px ("+(q.level==="good"?"충분":(q.level==="low"?"부족":"9칸 구분 어려움"))+") · 두 눈 "+(m.eyes===2?"보임":"한쪽만"));
       t.push("얼굴 너비 "+r((m.box.x1-m.box.x0)*video.videoWidth)+"px (영상의 "+r((m.box.x1-m.box.x0)*100)+"%)");
       t.push("거리 "+r(m.distCm)+"cm (화각 "+$("hfov").value+"° 가정)");
       t.push("머리 좌우 "+r(m.yaw)+"° 상하 "+r(m.pitch)+"° 기울임 "+r(m.roll)+"°");
