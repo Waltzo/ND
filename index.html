@@ -54,7 +54,8 @@ button,input{font:inherit;color:inherit}
 
 .stage{position:relative;flex:1;min-width:0;min-height:420px;padding:16px;display:grid;gap:12px;
   grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;
-  touch-action:none;cursor:none;user-select:none;-webkit-user-select:none}
+  touch-action:none;cursor:none;user-select:none;-webkit-user-select:none;
+  overflow:hidden;overflow:clip}   /* 시선 점이 가장자리에 닿아도 페이지 스크롤 막대가 생기지 않게 */
 
 .tile{--pad:14px;position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:var(--pad);
   display:flex;flex-direction:column;justify-content:space-between;align-items:center;text-align:center;min-width:0;min-height:0;opacity:.72;transition:opacity .12s}
@@ -86,7 +87,8 @@ button,input{font:inherit;color:inherit}
 /* 가운데 입력부 */
 .tile--input{opacity:1;justify-content:flex-start;gap:8px;overflow:hidden}
 .input__label{font-size:12px;color:var(--muted);letter-spacing:.04em}
-.input__now{flex:0 1 auto;margin:auto 0;max-width:100%;min-height:0;overflow:auto;font-family:var(--font-display);font-weight:700;font-size:clamp(24px,5vmin,44px);line-height:1.25;overflow-wrap:anywhere;white-space:pre-wrap}
+.input__now{flex:0 1 auto;margin:auto 0;max-width:100%;min-height:0;overflow:auto;font-family:var(--font-display);font-weight:700;font-size:clamp(24px,5vmin,44px);line-height:1.25;overflow-wrap:anywhere;white-space:pre-wrap;
+  padding-block:.12em}   /* 한글 글꼴은 줄 높이보다 키가 커서, 여백이 없으면 한 줄일 때도 스크롤 막대가 생깁니다 */
 /* 글이 넘치면 스크롤 막대가 카드 오른쪽 끝에 붙습니다 */
 .tile--input:not(.tile--back) .input__now{align-self:stretch;max-width:none;margin:auto calc(var(--pad)*-1) auto 0;padding-right:var(--pad);overflow-y:auto;scrollbar-width:thin}
 .input__now.is-empty{color:var(--muted);font-weight:400;font-size:15px}
