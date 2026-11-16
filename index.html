@@ -71,7 +71,6 @@ button,input{font:inherit;color:inherit}
 .mini{flex:1;align-self:stretch;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:4px}
 .mini span{display:grid;place-items:center;min-width:0;border:1px solid var(--line);border-radius:8px;font-family:var(--font-display);font-weight:700;line-height:1;font-size:clamp(15px,3.6vmin,32px)}
 .mini span.is-fn{font-size:clamp(9px,1.6vmin,13px);font-weight:500;color:var(--muted);border-style:dashed}
-.tile--back{justify-content:center;gap:8px}
 .tile.is-empty{background:transparent;border-style:dashed;opacity:.35}
 .tile.is-hit{animation:hit .45s ease-out}
 @keyframes hit{0%{box-shadow:0 0 0 0 var(--signal)}100%{box-shadow:0 0 0 22px transparent}}
@@ -94,14 +93,13 @@ button,input{font:inherit;color:inherit}
 .input__now{flex:0 1 auto;margin:auto 0;max-width:100%;min-height:0;overflow:auto;font-family:var(--font-display);font-weight:700;font-size:clamp(24px,5vmin,44px);line-height:1.25;overflow-wrap:anywhere;white-space:pre-wrap;
   padding-block:.12em}   /* 한글 글꼴은 줄 높이보다 키가 커서, 여백이 없으면 한 줄일 때도 스크롤 막대가 생깁니다 */
 /* 글이 넘치면 스크롤 막대가 카드 오른쪽 끝에 붙습니다 */
-.tile--input:not(.tile--back) .input__now{align-self:stretch;max-width:none;margin:auto calc(var(--pad)*-1) auto 0;padding-right:var(--pad);overflow-y:auto;scrollbar-width:thin}
+.tile--input .input__now{align-self:stretch;max-width:none;margin:auto calc(var(--pad)*-1) auto 0;padding-right:var(--pad);overflow-y:auto;scrollbar-width:thin}
 .input__now.is-empty{color:var(--muted);font-weight:400;font-size:15px}
 .input__now::after{content:"";display:inline-block;width:3px;height:1em;margin-left:3px;background:var(--signal);vertical-align:-0.12em;animation:caret 1s steps(2) infinite}
 @keyframes caret{50%{opacity:0}}
 .input__past{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:0;padding:0;list-style:none}
 .input__past li{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
-.input__back{font-family:var(--font-display);font-weight:700;font-size:clamp(20px,4.2vmin,36px);color:var(--accent);border:2px solid var(--accent);border-radius:12px;padding:2px 18px}
-.input__back[hidden],.input__past[hidden]{display:none}
+.input__past[hidden]{display:none}
 /* 내가 쓴 말 칸 아래 줄: 왼쪽에 "선택해서 말하기", 그 옆에 앞서 말한 문장 */
 .input__foot{align-self:stretch;display:flex;align-items:flex-end;gap:8px;min-width:0}
 .input__say{flex:none;font-size:12px;color:var(--c-speak);font-weight:500}
@@ -419,12 +417,12 @@ function compose(list){
     else for(var k in g.slots)put(+k,g.slots[k]);
     if(isC)m[2]={type:"dbl",kind:"F",label:dbl?"홑자음":"쌍자음",sub:dbl?"ㄱ ㄷ ㅂ ㅅ ㅈ 으로":"ㄲ ㄸ ㅃ ㅆ ㅉ 으로"};
     else if(!dbl)m[2]={type:"dbl",kind:"F",label:"이중모음",sub:g.dblSub};   /* 이중모음 상태에서는 이 칸을 비웁니다 */
-    m[5]={type:"cancel",label:"뒤로"};
+    m[5]={type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"};
     return m;
   }
   function numMap(n){
     var m={2:{type:"value",kind:"N",label:String(n),sub:"지금 숫자"},
-           5:{type:"cancel",label:"뒤로"},
+           5:{type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"},
            8:{type:"numcommit",kind:"F",label:"입력",sub:"이 숫자 넣기"}};
     [[1,-1],[3,1],[4,-5],[6,5],[7,-10],[9,10]].forEach(function(a){
       m[a[0]]={type:"step",kind:"N",label:(a[1]>0?"+":"")+a[1],sub:"",d:a[1]};
@@ -432,7 +430,7 @@ function compose(list){
     return m;
   }
   function wordMap(){
-    var m={5:{type:"cancel",label:"뒤로"}};
+    var m={5:{type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"}};
     WORDS.forEach(function(w,i){if(w)m[WSLOT[i]]={type:"word",kind:"W",label:w,sub:"",text:w}});
     return m;
   }
@@ -450,9 +448,6 @@ function compose(list){
           '<div class="input__now'+(text?"":" is-empty")+'" id="now" aria-live="polite">'+esc(text)+'</div>'+
           '<div class="input__foot"><span class="input__say">선택해서 말하기</span>'+
           '<ul class="input__past" aria-label="이전에 말한 문장">'+past.slice(-2).map(function(s){return "<li>"+esc(s)+"</li>"}).join("")+'</ul></div>';
-      }else if(d.type==="cancel"){
-        cls+=" tile--input tile--back";
-        html='<div class="input__back">뒤로</div>';
       }else if(d.type==="group"||d.type==="num"){
         cls+=" tile--group";
         var pv=d.type==="num"?numMap(0):groupMap(z,false),cells="";
