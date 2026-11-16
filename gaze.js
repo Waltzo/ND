@@ -33,6 +33,21 @@
   var tracker=null,mover=null,ear=new C.EarCloser();
   var resultT=0;
 
+  /* 보호자 설정(깜빡임, 호출음). 이 기기에 저장합니다. */
+  var SETKEY="nundam-gaze-set";
+  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3};
+  try{
+    var savedOpt=JSON.parse(localStorage.getItem(SETKEY));
+    if(savedOpt)for(var ok in opt)if(typeof savedOpt[ok]===typeof opt[ok])opt[ok]=savedOpt[ok];
+  }catch(err){}
+  function saveOpt(){try{localStorage.setItem(SETKEY,JSON.stringify(opt));}catch(err){}}
+  var alarmDet=new C.BlinkDetector({alarmMs:opt.alarm*1000});
+  function applyOpt(){
+    if(opt.blinkMax<opt.blinkMin+0.1)opt.blinkMax=opt.blinkMin+0.1;
+    alarmDet.alarmMs=opt.alarm*1000;
+    if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;}
+  }
+
   /* ---------- 화면 ---------- */
   var ov=document.createElement("div");
   ov.className="gz";ov.hidden=true;
@@ -226,7 +241,18 @@
     measureLight(m,now);
     onFrame(m,now);
   }
+  /* 안전장치: 어느 화면에서든 눈을 오래 감고 있으면 호출음을 울립니다. */
+  function watchEyes(m,now){
+    if(!m)return;
+    var c0=model?model.c0||0:0,c=C.clamp((closedRaw(m)-c0)/(1-c0),0,1);
+    alarmDet.on=model?0.5:0.65;      /* 보정 전에는 사람마다의 기준을 모르므로 조금 엄격하게 */
+    if(alarmDet.update(c,now).alarm){
+      N.alarm();
+      N.notice("눈을 오래 감고 있어 호출음을 울렸습니다.",5000);
+    }
+  }
   function onFrame(m,now){
+    watchEyes(m,now);
     if(mode==="posture")stepPosture(m,now);
     else if(mode==="calib")stepCalib(m,now);
     else if(mode==="quick")stepQuick(m,now);
@@ -353,13 +379,14 @@
   /* ---------- 쓰는 중 ---------- */
   function enterRun(){
     mode="run";
-    tracker=new C.Tracker({model:model});
+    tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0}});
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
   }
   function stepRun(m,now){
     var out=tracker.step(m,now);
     N.setGaze(out.pt,out.zone);
+    if(out.blink)N.blink();
     /* 태블릿이 옮겨진 것 같으면 입력을 잠그고 자세부터 다시 봅니다. */
     if(mover.update(m,now)){
       N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
@@ -374,6 +401,20 @@
   }
   var recalBtn=document.getElementById("recalBtn");
   if(recalBtn)recalBtn.addEventListener("click",recalibrate);
+
+  /* 설정 창의 조절 막대 */
+  function slider(id,key,fmt){
+    var el=document.getElementById(id),out=document.getElementById(id+"Out");
+    if(!el)return;
+    function show(){el.value=opt[key];if(out)out.textContent=fmt(opt[key]);}
+    el.addEventListener("input",function(){opt[key]=parseFloat(el.value);applyOpt();saveOpt();sliders.forEach(function(f){f()});});
+    sliders.push(show);show();
+  }
+  var sliders=[];
+  slider("blinkMin","blinkMin",function(v){return v.toFixed(2)+"초"});
+  slider("blinkMax","blinkMax",function(v){return v.toFixed(1)+"초"});
+  slider("eyeAlarm","alarm",function(v){return v?v+"초":"끔"});
+  applyOpt();
 
   window.NundamGaze={
     start:start,stop:stop,recalibrate:recalibrate,feed:feed,

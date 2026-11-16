@@ -205,7 +205,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-v="double" aria-pressed="true">두 번 깜빡임</button>
       <button type="button" data-v="dwell" aria-pressed="false">응시만</button>
     </div>
-    <p>깜빡임은 마우스 클릭이나 스페이스바로 대신합니다. 빠르게 두 번 누르세요.</p>
+    <p data-input="mouse">깜빡임은 마우스 클릭이나 스페이스바로 대신합니다. 빠르게 두 번 누르세요.</p>
+    <p data-input="camera">고를 칸을 보면서 눈을 또렷하게 두 번 감았다 뜨세요.</p>
   </div>
 
   <div class="field" data-mode="double">
@@ -239,6 +240,21 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <div class="field" data-input="camera">
     <div class="row"><button class="btn" id="recalBtn" type="button">다시 보정</button></div>
     <p>태블릿을 옮기면 자세를 다시 확인하고 가운데 한 점만 보면 됩니다. 그래도 잘 맞지 않으면 다시 보정을 누르세요. 9칸을 차례로 봅니다.</p>
+  </div>
+  <h2 data-input="camera">깜빡임과 호출음</h2>
+  <div class="field" data-input="camera">
+    <label class="field__top" for="blinkMin"><span>깜빡임으로 치는 가장 짧은 시간</span><output id="blinkMinOut">0.20초</output></label>
+    <input type="range" id="blinkMin" min="0.1" max="0.6" step="0.05" value="0.2">
+  </div>
+  <div class="field" data-input="camera">
+    <label class="field__top" for="blinkMax"><span>깜빡임으로 치는 가장 긴 시간</span><output id="blinkMaxOut">1.0초</output></label>
+    <input type="range" id="blinkMax" min="0.5" max="2" step="0.1" value="1">
+    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다.</p>
+  </div>
+  <div class="field" data-input="camera">
+    <label class="field__top" for="eyeAlarm"><span>눈을 오래 감으면 호출음</span><output id="eyeAlarmOut">3초</output></label>
+    <input type="range" id="eyeAlarm" min="0" max="10" step="1" value="3">
+    <p>눈을 이 시간 넘게 감고 있으면 어느 화면에서든 호출음이 울립니다. 소리를 꺼 두어도 울립니다. 0으로 두면 끕니다.</p>
   </div>
 
   <h2>시안 시험용</h2>
