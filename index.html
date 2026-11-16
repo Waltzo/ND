@@ -213,6 +213,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <button class="btn" id="clearBtn" type="button">모두 지우기</button>
   </div>
 
+  <h2>화면</h2>
+  <label class="check" for="wakeChk"><input type="checkbox" id="wakeChk" checked>화면 꺼짐 방지</label>
+  <p id="wakeNote">이 화면을 보는 동안 화면이 저절로 꺼지지 않게 합니다.</p>
+
   <h2>목소리</h2>
   <div class="field">
     <label class="field__top" for="voice"><span>목소리</span></label>
@@ -842,6 +846,46 @@ function compose(list){
   $("wake").addEventListener("input",function(){S.wake=this.value.trim()||"지니야";if(view===null)render();});
   range("noise","noiseOut","noise",function(v){return v?"±"+v+"px":"없음"});
   $("showGaze").addEventListener("change",function(){S.showGaze=this.checked});
+
+  /* 화면 꺼짐 방지(Screen Wake Lock). 다른 앱에 갔다 오면 풀리므로 화면으로 돌아올 때마다 다시 겁니다.
+     쉬기 모드에서도 켜 둡니다. 화면이 꺼지면 카메라가 멈춰 깨어날 수 없습니다. */
+  var wakeOn=true,wakeLock=null,wakeBusy=false;
+  try{if(localStorage.getItem("nundam-wake")==="off")wakeOn=false;}catch(err){}
+  function wakeNote(t){$("wakeNote").textContent=t}
+  var WAKE_HELP="기기 설정의 디스플레이 및 밝기에서 자동 잠금을 '안 함'으로 두면 됩니다.";
+  function wakeApply(){
+    if(!wakeOn){
+      if(wakeLock){try{wakeLock.release();}catch(err){}wakeLock=null;}
+      wakeNote("꺼 두었습니다. 기기에서 정한 시간이 지나면 화면이 꺼집니다.");
+      return;
+    }
+    if(!navigator.wakeLock||!navigator.wakeLock.request){
+      wakeNote("이 기기의 브라우저에서는 쓸 수 없습니다. "+WAKE_HELP);
+      return;
+    }
+    if(wakeLock||wakeBusy||document.visibilityState!=="visible")return;
+    wakeBusy=true;
+    navigator.wakeLock.request("screen").then(function(l){
+      wakeBusy=false;
+      if(!wakeOn){try{l.release();}catch(err){}return;}
+      wakeLock=l;
+      wakeNote("켜져 있습니다. 이 화면을 보는 동안 화면이 저절로 꺼지지 않습니다.");
+      l.addEventListener("release",function(){if(wakeLock===l)wakeLock=null;});
+    },function(){
+      wakeBusy=false;
+      wakeNote("기기가 받아 주지 않았습니다(배터리 절약 모드일 수 있습니다). "+WAKE_HELP);
+    });
+  }
+  $("wakeChk").checked=wakeOn;
+  $("wakeChk").addEventListener("change",function(){
+    wakeOn=this.checked;
+    try{localStorage.setItem("nundam-wake",wakeOn?"on":"off");}catch(err){}
+    wakeApply();
+  });
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")wakeApply();});
+  /* 처음 열 때 받아 주지 않는 기기가 있어, 화면을 한 번 누를 때도 다시 시도합니다. */
+  window.addEventListener("pointerdown",function(){if(wakeOn&&!wakeLock)wakeApply();});
+  wakeApply();
 
   /* 입력 방식: 마우스 / 카메라 */
   var noticeEl=$("notice"),noticeT=0;
