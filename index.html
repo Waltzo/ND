@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-/* 배치: 3x3 칸. 1 자주 쓰는 단어, 2 지우기, 3 지니야(기가지니 호출), 4 숫자, 5 내가 쓴 말, 6 말하기, 7-8 자음 묶음, 9 모음 묶음 */
+/* 배치: 3x3 칸. 1 자주 쓰는 단어, 2 지우기, 3 지니야(기가지니 호출), 4 숫자, 5 내가 쓴 말(고르면 말하기), 6 모음 묶음, 7-8 자음 묶음, 9 복합 모음 묶음 */
 :root{
   --bg:#EDF1F2;
   --surface:#FFFFFF;
@@ -72,7 +72,6 @@ button,input{font:inherit;color:inherit}
 .mini span{display:grid;place-items:center;min-width:0;border:1px solid var(--line);border-radius:8px;font-family:var(--font-display);font-weight:700;line-height:1;font-size:clamp(15px,3.6vmin,32px)}
 .mini span.is-fn{font-size:clamp(9px,1.6vmin,13px);font-weight:500;color:var(--muted);border-style:dashed}
 .tile--back{justify-content:center;gap:8px}
-.tile--back .input__now{flex:none;margin:0;font-size:clamp(14px,2.4vmin,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile.is-empty{background:transparent;border-style:dashed;opacity:.35}
 .tile.is-hit{animation:hit .45s ease-out}
 @keyframes hit{0%{box-shadow:0 0 0 0 var(--signal)}100%{box-shadow:0 0 0 22px transparent}}
@@ -103,8 +102,10 @@ button,input{font:inherit;color:inherit}
 .input__past li{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
 .input__back{font-family:var(--font-display);font-weight:700;font-size:clamp(20px,4.2vmin,36px);color:var(--accent);border:2px solid var(--accent);border-radius:12px;padding:2px 18px}
 .input__back[hidden],.input__past[hidden]{display:none}
-.input__hint:empty{display:none}
-.input__hint{font-size:13px;background:var(--ink);color:var(--bg);border-radius:10px;padding:5px 10px;align-self:center;max-width:100%}
+/* 내가 쓴 말 칸 아래 줄: 왼쪽에 "선택해서 말하기", 그 옆에 앞서 말한 문장 */
+.input__foot{align-self:stretch;display:flex;align-items:flex-end;gap:8px;min-width:0}
+.input__say{flex:none;font-size:12px;color:var(--c-speak);font-weight:500}
+.input__foot .input__past{flex:1;min-width:0;justify-content:flex-end}
 
 .gaze{position:absolute;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:2px solid var(--ink);background:color-mix(in srgb,var(--signal) 55%,transparent);pointer-events:none;z-index:2}
 .gaze[hidden]{display:none}
@@ -311,15 +312,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <div class="how" style="border-top:0;padding-top:0">
     <ol>
       <li>묶음 칸의 작은 9칸은 열었을 때 글자가 놓이는 자리입니다.</li>
-      <li>자음은 글자를 확인하면 바로 입력되고 처음 화면으로 돌아옵니다.</li>
+      <li>자음도 모음도 글자를 확인하면 바로 입력되고 처음 화면으로 돌아옵니다.</li>
+      <li>쌍자음 칸을 확인하면 ㄱ은 ㄲ으로, 이중모음 칸을 확인하면 ㅏ는 ㅑ, ㅗ는 ㅛ, ㅐ는 ㅒ, ㅔ는 ㅖ로 바뀝니다.</li>
+      <li>ㅐ ㅔ ㅚ ㅟ ㅙ ㅢ ㅞ 는 복합 모음 묶음에 있습니다. ㅘ는 ㅗ ㅏ, ㅝ는 ㅜ ㅓ 순서로 이어서 고르면 합쳐집니다.</li>
+      <li>내가 쓴 말 칸을 확인하면 쓴 글을 말합니다.</li>
       <li>지우기 칸은 확인하면 낱자 하나를, 눈을 길게 감았다 뜨면 글자 하나를 통째로 지웁니다. 마우스는 0.6초 넘게 눌렀다 뗍니다.</li>
-      <li>모음은 글자를 고른 뒤 입력 칸을 확인해야 들어갑니다. ㅗ, ㅏ, 입력은 ㅘ.</li>
-      <li>쌍자음 칸을 확인하면 ㄱ은 ㄲ, ㅏ는 ㅑ, ㅗ는 ㅛ처럼 바뀝니다.</li>
-      <li>ㅐ는 ㅏ ㅣ, ㅔ는 ㅓ ㅣ, ㅢ는 ㅡ ㅣ, ㅝ는 ㅜ ㅓ 순서로 고릅니다.</li>
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
       <li>지니야 칸은 쓴 말을 기가지니에게 명령으로 전합니다. 쓴 말이 없으면 호출어만 말합니다.</li>
       <li>묶음 안에서는 가운데가 뒤로입니다.</li>
-    </ol>
     </ol>
   </div>
 </dialog>
@@ -364,36 +364,37 @@ function compose(list){
 
 (function(){
   "use strict";
+  /* 묶음. 숫자는 처음 화면에서의 칸 번호입니다. 자음은 set 을 CSLOT 자리에 차례로 놓고,
+     모음은 slots(자리: 글자)로 놓습니다. dbl 은 쌍자음/이중모음을 눌렀을 때 바뀌는 글자입니다. */
   var GROUPS={
-    7:{kind:"C",set:["ㄱ","ㄴ","ㄷ","ㄹ","ㅁ","ㅂ","ㅅ"]},
-    8:{kind:"C",set:["ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"]},
-    9:{kind:"V",set:["ㅏ","ㅓ","ㅗ","ㅜ","ㅡ","ㅣ"]}
+    7:{kind:"C",name:"자음",set:["ㄱ","ㄴ","ㄷ","ㄹ","ㅁ","ㅂ","ㅅ"]},
+    8:{kind:"C",name:"자음",set:["ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"]},
+    6:{kind:"V",name:"모음",slots:{1:"ㅏ",3:"ㅓ",4:"ㅗ",6:"ㅜ",7:"ㅡ",9:"ㅣ"},dbl:{"ㅏ":"ㅑ","ㅓ":"ㅕ","ㅗ":"ㅛ","ㅜ":"ㅠ"},dblSub:"ㅑ ㅕ ㅛ ㅠ 로"},
+    9:{kind:"V",name:"복합 모음",slots:{1:"ㅐ",3:"ㅔ",4:"ㅚ",6:"ㅟ",7:"ㅙ",8:"ㅢ",9:"ㅞ"},dbl:{"ㅐ":"ㅒ","ㅔ":"ㅖ"},dblSub:"ㅒ ㅖ 로"}
   };
-  var CSLOT=[1,3,4,6,7,8,9],VSLOT=[1,3,4,6,7,9],WSLOT=[1,2,3,4,6,7,8,9];
+  var CSLOT=[1,3,4,6,7,8,9],WSLOT=[1,2,3,4,6,7,8,9];
   var CDOUBLE={"ㄱ":"ㄲ","ㄷ":"ㄸ","ㅂ":"ㅃ","ㅅ":"ㅆ","ㅈ":"ㅉ"};
-  var VDOUBLE={"ㅏ":"ㅑ","ㅓ":"ㅕ","ㅗ":"ㅛ","ㅜ":"ㅠ"};
   var WORDS=["예","아니오","아파요","물 주세요","화장실","고마워요","도와주세요","자세 바꿔주세요"];
   try{var saved=JSON.parse(localStorage.getItem("nundam-words"));if(saved&&saved.length===8)WORDS=saved;}catch(err){}
   var KIND={C:["자음","--c-cons"],V:["모음","--c-vowel"],F:["기능","--c-func"],S:["말하기","--c-speak"],W:["단어","--c-speak"],N:["숫자","--c-func"]};
   var $=function(id){return document.getElementById(id)};
-  var stage=$("stage"),gazeEl=$("gaze"),hintEl=null,lastHint="";
+  var stage=$("stage"),gazeEl=$("gaze");
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
   var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,wake:"지니야",wakeGap:1.5,input:"mouse",nav:"joy"};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, 7 8 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
-  var dblOn=false;          /* 쌍자음 보기 */
-  var pend=false;           /* 모음을 고르는 중(아직 입력 전) */
+  var dblOn=false;          /* 쌍자음, 이중모음 보기 */
   var cur={};               /* 지금 각 칸이 하는 일 */
   var list=[],past=[];
   var raw=null,jit={x:0,y:0},zone=null,lookEl=null;
   var firstEl=null,shownFirst=null;   /* 첫 깜빡임이 읽힌 칸, 지금 주황 테두리가 그려진 칸 */
-  var firstBlink=0,firstZone=null,dwellT=0,armed=true,msg="",msgUntil=0;
+  var firstBlink=0,firstZone=null,dwellT=0,armed=true;
   var W=1,H=1,SX=0,SY=0;     /* 자판 영역의 크기와 화면에서의 위치 */
   var focus=5;              /* 조이스틱 방식에서 가운데에 와 있는 칸 */
   var jz=null,jc=null,jct=0; /* 조이스틱 방향이 경계에서 떨리지 않게 잠깐 머물러야 바뀝니다 */
-  var DIR={2:"위",8:"아래",4:"왼쪽",6:"오른쪽"},DIRTO={2:"위로",8:"아래로",4:"왼쪽으로",6:"오른쪽으로"};
+  var DIR={2:1,8:1,4:1,6:1};   /* 조이스틱의 방향 자리(위, 아래, 왼쪽, 오른쪽) */
   var camZone=null,locked=false;   /* 카메라가 알려 준 칸, 자세 점검과 보정 중 입력 잠금 */
 
   function mainMap(){
@@ -401,20 +402,21 @@ function compose(list){
            2:{type:"back",kind:"F",label:"지우기",sub:"확인: 낱자 · 길게 감기: 한 글자"},
            3:{type:"genie",kind:"S",label:S.wake,sub:"쓴 말을 기가지니에게"},
            4:{type:"num",kind:"N"},
-           5:{type:"input"},
-           6:{type:"speak",kind:"S",label:"말하기",sub:"쓴 글을 읽습니다"}};
-    [7,8,9].forEach(function(z){m[z]={type:"group",kind:GROUPS[z].kind}});
+           5:{type:"input"}};
+    [6,7,8,9].forEach(function(z){m[z]={type:"group",kind:GROUPS[z].kind,name:GROUPS[z].name}});
     return m;
   }
   /* 묶음을 열었을 때 9칸에 놓이는 것. 묶음 칸의 미리보기도 이것을 그대로 씁니다. */
   function groupMap(z,dbl){
-    var g=GROUPS[z],isC=g.kind==="C",slots=isC?CSLOT:VSLOT,dmap=isC?CDOUBLE:VDOUBLE,m={};
-    g.set.forEach(function(ch,i){
-      var c=dbl&&dmap[ch]?dmap[ch]:ch;
-      m[slots[i]]={type:"char",kind:g.kind,label:c,ch:c,sub:""};
-    });
-    m[2]={type:"dbl",kind:"F",label:dbl?"홑자음":"쌍자음",sub:isC?(dbl?"ㄱ ㄷ ㅂ ㅅ ㅈ 으로":"ㄲ ㄸ ㅃ ㅆ ㅉ 으로"):(dbl?"ㅏ ㅓ ㅗ ㅜ 로":"ㅑ ㅕ ㅛ ㅠ 로")};
-    if(!isC)m[8]={type:"commit",kind:"F",label:"입력",sub:"고른 모음 넣기"};
+    var g=GROUPS[z],isC=g.kind==="C",m={};
+    function put(slot,ch){
+      var c=dbl&&isC&&CDOUBLE[ch]?CDOUBLE[ch]:(dbl&&!isC&&g.dbl[ch]?g.dbl[ch]:ch);
+      m[slot]={type:"char",kind:g.kind,label:c,ch:c,sub:""};
+    }
+    if(isC)g.set.forEach(function(ch,i){put(CSLOT[i],ch)});
+    else for(var k in g.slots)put(+k,g.slots[k]);
+    if(isC)m[2]={type:"dbl",kind:"F",label:dbl?"홑자음":"쌍자음",sub:dbl?"ㄱ ㄷ ㅂ ㅅ ㅈ 으로":"ㄲ ㄸ ㅃ ㅆ ㅉ 으로"};
+    else if(!dbl)m[2]={type:"dbl",kind:"F",label:"이중모음",sub:g.dblSub};   /* 이중모음 상태에서는 이 칸을 비웁니다 */
     m[5]={type:"cancel",label:"뒤로"};
     return m;
   }
@@ -444,16 +446,21 @@ function compose(list){
         cls+=" tile--input";
         html='<span class="input__label">내가 쓴 말</span>'+
           '<div class="input__now'+(text?"":" is-empty")+'" id="now" aria-live="polite">'+esc(text)+'</div>'+
-          '<ul class="input__past" aria-label="이전에 말한 문장">'+past.slice(-2).map(function(s){return "<li>"+esc(s)+"</li>"}).join("")+'</ul>';
+          '<div class="input__foot"><span class="input__say">선택해서 말하기</span>'+
+          '<ul class="input__past" aria-label="이전에 말한 문장">'+past.slice(-2).map(function(s){return "<li>"+esc(s)+"</li>"}).join("")+'</ul></div>';
       }else if(d.type==="cancel"){
         cls+=" tile--input tile--back";
-        html='<div class="input__now'+(text?"":" is-empty")+'" id="now" aria-live="polite">'+(text?esc(text):"아직 쓴 말이 없습니다")+'</div>'+
-          '<div class="input__back">뒤로</div><span class="input__hint" id="hint"></span>';
+        html='<div class="input__back">뒤로</div>';
       }else if(d.type==="group"||d.type==="num"){
         cls+=" tile--group";
         var pv=d.type==="num"?numMap(0):groupMap(z,false),cells="";
-        for(var i=1;i<=9;i++){var c=pv[i],big=c.type==="char"||c.type==="step"||c.type==="value";cells+='<span'+(big?"":' class="is-fn"')+'>'+esc(c.label)+'</span>';}
-        html='<span class="tile__kind" style="--k:var('+KIND[d.kind][1]+')">'+KIND[d.kind][0]+' 묶음</span><div class="mini">'+cells+'</div>';
+        for(var i=1;i<=9;i++){
+          var c=pv[i];
+          if(!c){cells+='<span class="is-fn"></span>';continue;}     /* 빈 칸 */
+          var big=c.type==="char"||c.type==="step"||c.type==="value";
+          cells+='<span'+(big?"":' class="is-fn"')+'>'+esc(c.label)+'</span>';
+        }
+        html='<span class="tile__kind" style="--k:var('+KIND[d.kind][1]+')">'+(d.name||KIND[d.kind][0])+' 묶음</span><div class="mini">'+cells+'</div>';
       }else{
         cls+=(d.type==="char"||d.type==="step"||d.type==="value")?" tile--one":" tile--word";
         html='<span class="tile__kind" style="--k:var('+KIND[d.kind][1]+')">'+KIND[d.kind][0]+'</span>'+
@@ -462,8 +469,7 @@ function compose(list){
       t.className=cls+(t===lookEl?" is-look":"")+(t===shownFirst?" is-first":"")+(S.nav==="joy"&&z===focus?" is-focus":"");
       t.innerHTML=html+'<div class="ring"></div>';
     }
-    hintEl=$("hint");if(hintEl)hintEl.textContent=lastHint;
-    var now=$("now");now.scrollTop=now.scrollHeight;
+    var now=$("now");if(now)now.scrollTop=now.scrollHeight;
   }
 
   function layout(){var s=stage.getBoundingClientRect();W=s.width||1;H=s.height||1;SX=s.left;SY=s.top;}
@@ -548,8 +554,8 @@ function compose(list){
     if(S.nav!=="joy"){act(z);return;}
     if(z===5){act(focus);return;}
     var t=neighbor(z);
-    if(t){focus=t;placeBoard();say(DIRTO[z]+" 옮겼습니다");tick(880,0.06);}
-    else{say(DIR[z]+"에는 칸이 없습니다");tick(330,0.08);}
+    if(t){focus=t;placeBoard();tick(880,0.06);}
+    else tick(330,0.08);          /* 그쪽에는 칸이 없음 */
     armed=false;dwellT=0;
   }
   function zoneAt(g){
@@ -581,11 +587,9 @@ function compose(list){
     if(!d||d.type!=="back")return;
     firstBlink=0;
     var text=compose(list);
-    if(!text){say("지울 글자가 없습니다");}
-    else{
+    if(text){
       var want=text.slice(0,-1);
       do{list.pop();}while(list.length&&compose(list)!==want);
-      say("한 글자를 통째로 지웠습니다");
     }
     armed=false;dwellT=0;
     render();tick(660,0.2);
@@ -620,7 +624,7 @@ function compose(list){
     if(S.sound){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(err){}
       speak("소리를 켰습니다");}
   });
-  $("clearBtn").addEventListener("click",function(){list=[];view=null;dblOn=false;pend=false;focus=5;placeBoard();render()});
+  $("clearBtn").addEventListener("click",function(){list=[];view=null;dblOn=false;focus=5;placeBoard();render()});
   WORDS.forEach(function(w,i){
     var el=$("w"+i);el.value=w;
     el.addEventListener("input",function(){
@@ -630,60 +634,49 @@ function compose(list){
     });
   });
 
-  function say(m){msg=m;msgUntil=performance.now()+1300}
-
   /* 칸 하나를 확인했을 때 */
   function act(z){
     var d=cur[z],view0=view;
-    if(!d||d.type==="input"||d.type==="value")return;
-    if(d.type==="num"){view="N";num=0;say("숫자를 맞추세요");}
-    else if(d.type==="step"){num=Math.max(0,Math.min(999,num+d.d));say("지금 숫자 "+num);}
-    else if(d.type==="numcommit"){Array.prototype.push.apply(list,String(num).split(""));view=null;say(num+" 입력했습니다");}
-    else if(d.type==="group"){view=z;dblOn=false;pend=false;say("글자를 고르세요");}
-    else if(d.type==="words"){view="W";say("단어를 고르세요");}
-    else if(d.type==="cancel"){
-      if(pend){list.pop();pend=false;}
-      view=null;dblOn=false;say("처음 화면으로 돌아왔습니다");
+    if(!d||d.type==="value")return;
+    if(d.type==="input"){
+      /* 내가 쓴 말 칸을 고르면 쓴 글을 말합니다 */
+      var text=compose(list).trim();
+      armed=false;dwellT=0;
+      if(!text)return;
+      speak(text);past.push(text);list=[];
     }
-    else if(d.type==="dbl"){dblOn=!dblOn;say(dblOn?"쌍자음으로 바꿨습니다":"홑자음으로 바꿨습니다");}
+    else if(d.type==="num"){view="N";num=0;}
+    else if(d.type==="step"){num=Math.max(0,Math.min(999,num+d.d));}
+    else if(d.type==="numcommit"){Array.prototype.push.apply(list,String(num).split(""));view=null;}
+    else if(d.type==="group"){view=z;dblOn=false;}
+    else if(d.type==="words"){view="W";}
+    else if(d.type==="cancel"){view=null;dblOn=false;}
+    else if(d.type==="dbl"){dblOn=!dblOn;}
     else if(d.type==="char"){
-      if(d.kind==="C"){list.push(d.ch);view=null;dblOn=false;say(d.ch+" 입력했습니다");}
-      else if(!pend){list.push(d.ch);pend=true;dblOn=false;say(d.ch+" 골랐습니다. 입력 칸으로 넣으세요");}
-      else{
-        var prev=list[list.length-1],j=VJOIN[prev+d.ch];
-        if(j){list[list.length-1]=j;say(prev+" 와 "+d.ch+" 를 합쳐 "+j);}
-        else say(prev+" 와 "+d.ch+" 는 합칠 수 없습니다");
-        dblOn=false;
-      }
-    }
-    else if(d.type==="commit"){
-      if(pend){pend=false;view=null;dblOn=false;say(list[list.length-1]+" 입력했습니다");}
-      else say("모음을 먼저 고르세요");
+      /* 자음도 모음도 고르면 바로 들어갑니다. 모음을 이어서 넣으면 합칩니다: ㅗ ㅏ 는 ㅘ, ㅜ ㅓ 는 ㅝ */
+      var prev=list[list.length-1],j=d.kind==="V"&&prev?VJOIN[prev+d.ch]:null;
+      if(j)list[list.length-1]=j;else list.push(d.ch);
+      view=null;dblOn=false;
     }
     else if(d.type==="word"){
       if(list.length&&list[list.length-1]!==" ")list.push(" ");
       Array.prototype.push.apply(list,d.text.split(""));list.push(" ");
-      view=null;say(d.text+" 넣었습니다");
+      view=null;
     }
-    else if(d.type==="back"){
-      if(list.length){list.pop();say("낱자 하나를 지웠습니다");}else say("지울 글자가 없습니다");
-    }
+    else if(d.type==="back"){list.pop();}
     else if(d.type==="genie"){
-      /* 호출어를 먼저 말하고, 기가지니가 들을 준비를 할 시간을 둔 뒤 명령을 말합니다 */
+      /* 호출어를 먼저 말하고, 기가지니가 들을 준비를 할 시간을 둔 뒤 명령을 말합니다. 소리가 켜져 있어야 합니다. */
       var cmd=compose(list).trim();
-      if(!S.sound)say("설정에서 소리를 켜야 기가지니가 듣습니다");
-      else if(cmd){
-        speak(S.wake,function(){setTimeout(function(){speak(cmd)},S.wakeGap*1000)});
-        past.push(S.wake+", "+cmd);list=[];say("기가지니에게 말했습니다");
-      }else{speak(S.wake);say(S.wake+" 하고 불렀습니다");}
-    }
-    else if(d.type==="speak"){
-      var text=compose(list).trim();
-      if(text){speak(text);past.push(text);list=[];say("말했습니다");}else say("말할 글이 없습니다");
+      if(S.sound){
+        if(cmd){
+          speak(S.wake,function(){setTimeout(function(){speak(cmd)},S.wakeGap*1000)});
+          past.push(S.wake+", "+cmd);list=[];
+        }else speak(S.wake);
+      }
     }
     armed=false;dwellT=0;
     /* 글자나 숫자를 넣었거나 화면이 바뀌면 다시 가운데에서 시작합니다 */
-    if(view!==view0||d.type==="speak"||d.type==="genie"){focus=5;placeBoard();}
+    if(view!==view0||d.type==="input"||d.type==="genie"){focus=5;placeBoard();}
     render();tick(880,0.12);
     var t=tiles[z];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
@@ -691,7 +684,7 @@ function compose(list){
   var last=performance.now();
   function frame(now){
     var dt=Math.min(0.05,(now-last)/1000);last=now;
-    var g=null,dbl=S.pick==="double",text;
+    var g=null,dbl=S.pick==="double";
     if(raw){
       if(S.noise>0&&S.input==="mouse"){jit.x=jit.x*0.9+(Math.random()-0.5)*S.noise*0.6;jit.y=jit.y*0.9+(Math.random()-0.5)*S.noise*0.6;}
       else{jit.x=0;jit.y=0;}
@@ -709,18 +702,14 @@ function compose(list){
       shownFirst=fe;
     }
 
-    if(!g){text=S.input==="camera"?"시선을 놓쳐 멈췄습니다":"시선이 자판 밖에 있어 멈췄습니다";}
-    else if(now<msgUntil){text=msg;}
-    else if(dbl){text=firstBlink?"한 번 더 깜빡이세요":"";}
-    else{
+    if(g&&!dbl){
       var sz=slot(zone),d=sz?cur[sz]:null;
       /* 조이스틱의 방향은 옮길 칸이 있으면, 그 밖에는 고를 수 있는 칸이면 응시 시간을 셉니다 */
-      var can=S.nav==="joy"&&zone!==5?!!sz:!!(d&&d.type!=="input"&&d.type!=="value");
+      var can=S.nav==="joy"&&zone!==5?!!sz:!!(d&&d.type!=="value");
       if(can&&armed){
         dwellT+=dt;
         if(dwellT>=S.dwell){confirm(zone);}
       }
-      text=now<msgUntil?msg:"";
     }
 
     var el=zone?(tiles[slot(zone)]||null):null;
@@ -741,8 +730,6 @@ function compose(list){
     if(lookEl)lookEl.classList.toggle("is-snap",S.nav==="joy"&&!!DIR[zone]);
     if(g&&S.showGaze){gazeEl.hidden=false;gazeEl.style.transform="translate("+g.x+"px,"+g.y+"px)";}
     else gazeEl.hidden=true;
-    lastHint=text;
-    if(hintEl&&hintEl.textContent!==text)hintEl.textContent=text;
     requestAnimationFrame(frame);
   }
 
