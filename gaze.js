@@ -9,15 +9,16 @@
   if(!C||!N)return;
 
   /* 주소는 공식 문서(developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js)에서 확인.
-     @latest 는 어느 날 바뀔 수 있어 판을 고정합니다. */
+     @latest, latest 는 어느 날 바뀔 수 있어 프로그램과 모델 모두 판을 고정합니다. */
   var LIB="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3";
-  var MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
+  var MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
   var stage=N.stage;
   var mode="off";            /* off, loading, posture, calib, quick, verify, run */
   var runId=0;               /* 켜고 끄기가 겹칠 때 늦게 끝난 준비 작업을 버리려고 셉니다 */
   var video=null,stream=null,vision=null,landmarker=null,libP=null;
   var lastVT=-1,lastInfer=0,minGap=0,errors=0;
+  var lastFrameAt=0,lastLoopAt=0,modelP=null,frameC=0,eyesLostAt=null;
   var light=null,lightAt=0,lightCv=null;
   var blinkIdx=null;
   var lastM=null;            /* 가장 최근 측정값(진단 표시용) */
@@ -157,8 +158,9 @@
   }
   function loadModel(){
     if(landmarker)return Promise.resolve();
+    if(modelP)return modelP;           /* 켜고 끄기가 겹쳐도 모델은 하나만 만듭니다 */
     libP=libP||import(LIB+"/vision_bundle.mjs");
-    return libP.then(function(v){
+    modelP=libP.then(function(v){
       vision=v;
       return v.FilesetResolver.forVisionTasks(LIB+"/wasm");
     }).then(function(files){
@@ -170,10 +172,11 @@
         });
       }
       return make("GPU").catch(function(){return make("CPU")});
-    }).then(function(lmk){landmarker=lmk;},function(err){
-      libP=null;
+    }).then(function(lmk){landmarker=lmk;modelP=null;},function(err){
+      libP=null;modelP=null;
       throw {name:"ModelLoad",cause:err};
     });
+    return modelP;
   }
   function reason(err){
     var n=err&&err.name;
@@ -193,7 +196,7 @@
   function start(o){
     if(mode!=="off")return;
     var id=++runId;
-    sim=!!(o&&o.sim);tries=0;
+    sim=!!(o&&o.sim);tries=0;ver.redone=false;alarmDet.reset();eyesLostAt=null;
     loadCal();
     mode="loading";N.lock(true);
     if(sim){light=null;enterPosture();return;}
@@ -205,7 +208,7 @@
       return attach(s).then(loadModel);
     }).then(function(){
       if(id!==runId)return;
-      lastVT=-1;lastInfer=0;errors=0;light=null;
+      lastVT=-1;lastInfer=0;errors=0;light=null;lastFrameAt=lastLoopAt=performance.now();
       fpsM=new C.FpsMeter();inferMs=0;frames=0;lowRate=false;minGap=0;
       enterPosture();
       requestAnimationFrame(loop);
@@ -214,7 +217,7 @@
     });
   }
   function stop(){
-    runId++;mode="off";clearTimeout(resultT);
+    runId++;mode="off";clearTimeout(resultT);alarmDet.reset();
     release();screen(null);chip.hidden=true;diag.hidden=true;
     N.setGaze(null);N.lock(false);
   }
@@ -261,12 +264,19 @@
     if(mode==="off"||mode==="loading")return;
     requestAnimationFrame(loop);
     var now=performance.now();
+    /* 화면이 가려져 있다가 돌아온 것은 카메라가 멈춘 것이 아닙니다. */
+    if(now-lastLoopAt>1000){lastFrameAt=now;if(video&&video.paused)video.play().catch(function(){});}
+    lastLoopAt=now;
+    /* 카메라 영상이 멈추면 마지막 칸에 붙어 있지 않게 입력을 멈추고, 오래가면 마우스 방식으로 돌아갑니다. */
+    if(now-lastFrameAt>500)N.setGaze(null);
+    if(now-lastFrameAt>6000){fail("카메라 영상이 멈췄습니다.");return;}
     if(!video||video.readyState<2||video.currentTime===lastVT)return;
     if(now-lastInfer<minGap)return;
     lastVT=video.currentTime;lastInfer=now;
     var res=null;
     try{res=landmarker.detectForVideo(video,now);errors=0;}
     catch(err){if(++errors>30){fail("얼굴 인식이 멈췄습니다.");}return;}
+    lastFrameAt=now;
     /* 실제 속도를 재서, 느린 기기에서는 모델 실행을 초당 15회쯤으로 낮춥니다. */
     var took=performance.now()-now;
     inferMs=inferMs?inferMs*0.9+took*0.1:took;
@@ -279,17 +289,29 @@
   }
   /* 안전장치: 어느 화면에서든 눈을 오래 감고 있으면 호출음을 울립니다. */
   function watchEyes(m,now){
-    if(!m)return;
-    var c0=model?model.c0||0:0,c=C.clamp((closedRaw(m)-c0)/(1-c0),0,1);
-    alarmDet.on=model?0.5:0.65;      /* 보정 전에는 사람마다의 기준을 모르므로 조금 엄격하게 */
+    if(!m){
+      /* 얼굴을 놓친 동안은 눈을 알 수 없습니다. 길어지면 감고 있던 시간을 잇지 않습니다. */
+      if(eyesLostAt===null)eyesLostAt=now;
+      if(now-eyesLostAt>1000)alarmDet.reset();
+      return;
+    }
+    eyesLostAt=null;
+    var c0=model?model.c0||0:0,c=C.clamp((frameC-c0)/(1-c0),0,1);
+    alarmDet.on=model?0.5:0.8;       /* 보정 전에는 사람마다의 기준을 모릅니다. 아래를 볼 때 점수가 높게 나와도 울리지 않게 */
     if(alarmDet.update(c,now).alarm){
       N.alarm();
       N.notice("눈을 오래 감고 있어 호출음을 울렸습니다.",5000);
     }
   }
   function onFrame(m,now){
+    frameC=m?(m.closed==null?ear.update(m.open):m.closed):0;   /* 원래 감김 점수 */
     watchEyes(m,now);
     showDiag(m);
+    /* 설정 창이 화면을 가리는 동안에는 점검과 보정을 멈추고, 닫으면 그 점부터 다시 합니다. */
+    if(N.settingsOpen()&&(mode==="posture"||mode==="calib"||mode==="quick"||mode==="verify")){
+      gate.since=null;col.start(now);calLost=null;ver.t0=now;ver.zones=[];
+      return;
+    }
     if(mode==="posture")stepPosture(m,now);
     else if(mode==="calib")stepCalib(m,now);
     else if(mode==="quick")stepQuick(m,now);
@@ -328,8 +350,13 @@
   function saveCal(){
     try{localStorage.setItem(KEY,JSON.stringify({v:1,model:model,base:base}));}catch(err){}
   }
-  /* 원래 감김 점수. 보정 중에는 아직 사람마다의 기준(c0)을 모르므로 그대로 씁니다. */
-  function closedRaw(m){return m?(m.closed==null?ear.update(m.open):m.closed):0}
+  /* 한 점에서 너무 오래 걸리면 환자가 그 화면에 갇히지 않게 자세 점검부터 다시 합니다. */
+  function pointStuck(now){
+    if(now-col.t0<20000)return false;
+    if(++tries>=3)fail("보정을 마치지 못했습니다.");
+    else enterPosture();
+    return true;
+  }
   function target(z,text){
     var c=C.zoneCenter(z);
     ui.dot.style.left=c.x*100+"%";ui.dot.style.top=c.y*100+"%";
@@ -352,7 +379,8 @@
   }
   function stepCalib(m,now){
     if(lostTooLong(m,now)){enterPosture();return;}
-    ui.dot.style.setProperty("--p",col.update(m,closedRaw(m),now));
+    if(pointStuck(now))return;
+    ui.dot.style.setProperty("--p",col.update(m,frameC,now));
     if(!col.done())return;
     var z=ORDER[calIdx],c=C.zoneCenter(z);
     col.buf.forEach(function(s){calSamples.push({f:s.f,x:c.x,y:c.y});calMs.push(s.m);});
@@ -443,9 +471,10 @@
   }
   function stepQuick(m,now){
     if(lostTooLong(m,now)){enterPosture();return;}
-    ui.dot.style.setProperty("--p",col.update(m,closedRaw(m),now));
+    if(pointStuck(now))return;
+    ui.dot.style.setProperty("--p",col.update(m,frameC,now));
     if(!col.done())return;
-    N.tick(880,0.08);
+    tries=0;N.tick(880,0.08);
     if(!C.biasFix(model,col.buf.map(function(s){return s.f}))){enterCalib();return;}
     base=C.baselineOf(col.buf.map(function(s){return s.m}));
     saveCal();

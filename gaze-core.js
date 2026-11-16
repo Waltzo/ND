@@ -267,7 +267,7 @@
   Tracker.prototype.reset=function(){
     this.fx.reset();this.fy.reset();this.hold.reset();this.blink.reset();
     this.lastPt=null;this.lastZone=null;this.lastRaw=null;this.jump=false;
-    this.lostSince=null;this.settleUntil=0;
+    this.lostSince=null;this.settleUntil=0;this.halfSince=null;
   };
   /* 감김 점수에서, 눈을 뜨고 있어도 나오는 만큼(c0, 아래를 볼 때 큽니다)을 뺍니다. */
   Tracker.prototype.closedOf=function(m){
@@ -290,6 +290,11 @@
     if(b.opened)this.settleUntil=t+this.settleMs;
     /* 감는 동안, 반쯤 감긴 동안, 막 뜬 직후에는 홍채가 흔들리므로 감기 직전 칸을 유지합니다. */
     if(b.closed&&b.dur>this.blink.maxMs){out.why="closed";return out;}
+    /* 눈꺼풀이 반쯤 내려온 채로 오래 있으면(졸림, 눈꺼풀 처짐) 마지막 칸에 붙들어 두지 않고 멈춥니다. */
+    if(!b.closed&&c>=this.blink.off){
+      if(this.halfSince===null)this.halfSince=t;
+      if(t-this.halfSince>this.blink.maxMs){this.lastPt=null;this.lastZone=null;this.hold.reset();out.why="closed";return out;}
+    }else this.halfSince=null;
     if(b.closed||c>=this.blink.off||t<this.settleUntil){
       out.pt=this.lastPt;out.zone=this.lastZone;
       if(!out.pt)out.why="closed";
@@ -332,7 +337,7 @@
     function range(k,a){var lo=Infinity,hi=-Infinity;a.forEach(function(v){if(v[k]<lo)lo=v[k];if(v[k]>hi)hi=v[k];});return hi-lo}
     var spread=Math.max(range("hx",this.recent),range("hy",this.recent));
     /* 떨림이 큰 카메라에서도 끝나도록 기다릴수록 조금씩 너그러워집니다. */
-    var tol=this.tol*(1+(t-this.t0-this.settleMs)/3000);
+    var tol=this.tol*Math.min(3,1+(t-this.t0-this.settleMs)/3000);
     if(spread>tol*3){this.buf=[];return 0;}          /* 눈을 다른 데로 돌렸음 */
     if(spread<=tol)this.buf.push({f:featureVec(m),c:c,m:m});
     return this.progress();

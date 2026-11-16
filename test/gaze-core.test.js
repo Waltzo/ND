@@ -309,6 +309,21 @@ test("눈을 떠도 나오는 감김 점수(c0)는 감은 것으로 치지 않�
   t.log=[];look(tr,8,400,t,{closed:0.95});look(tr,8,300,t,{closed:0.5});
   assert.strictEqual(t.log.filter(function(o){return o.blink}).length,1,"진짜로 감으면 깜빡임");
 });
+test("눈꺼풀이 반쯤 내려온 채 오래 있으면 입력을 멈춘다",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  look(tr,5,500,t);
+  var out=look(tr,5,600,t,{closed:0.42});
+  assert.ok(out.pt,"잠깐은 마지막 칸을 유지");assert.strictEqual(out.zone,5);
+  out=look(tr,5,900,t,{closed:0.42});
+  assert.strictEqual(out.pt,null);assert.strictEqual(out.why,"closed");
+  assert.strictEqual(look(tr,5,500,t).zone,5,"눈을 다 뜨면 다시 이어집니다");
+});
+test("표본 모으기: 기다려도 허용 폭은 3배까지만 넓어진다",function(){
+  var col=new G.Collector(),t=0,i;col.start(0);
+  /* 2분 동안 눈이 크게 오가면 끝내 채워지지 않아야 합니다 */
+  for(i=0;i<3600&&!col.done();i++){t+=33;col.update(meas({gx:i%2?0.1:0.9}),0,t);}
+  assert.strictEqual(col.done(),false);
+});
 test("감김 점수가 없으면 눈꺼풀 간격으로 깜빡임을 읽는다",function(){
   var tr=tracker(),t=0,n=0,i,out;
   function step(closed){t+=33;out=tr.step(G.measure(fakeFace({closed:closed}),{vw:VW,vh:VH}),t);if(out.blink)n++;}
