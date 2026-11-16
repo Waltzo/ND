@@ -114,21 +114,33 @@
   }
 
   /* 카메라 영상을 거울처럼 뒤집어 그리고, 그 위에 얼굴 테두리(eyes면 눈 테두리와 홍채 점)를 얹습니다. */
+  /* 얼굴을 따라가는 중이면 영상 전체가 아니라, 얼굴을 한가운데 두고 키운 그림(모델이 읽는 범위)을 보여 줍니다. */
   function drawView(cv,m,eyes){
     var vw=video&&video.videoWidth?video.videoWidth:640,vh=video&&video.videoWidth?video.videoHeight:480;
-    var w=cv.width,h=Math.round(w*vh/vw),g=cv.getContext("2d");
+    var v=crop&&m?crop:{x:0,y:0,w:vw,h:vh};            /* 보여 줄 범위(원본 영상 픽셀) */
+    var w=cv.width,h=Math.round(w*v.h/v.w),g=cv.getContext("2d"),k=w/v.w;
     if(cv.height!==h)cv.height=h;
-    if(video&&video.videoWidth){g.save();g.scale(-1,1);g.drawImage(video,-w,0,w,h);g.restore();}
-    else{g.fillStyle=cssVar("--surface");g.fillRect(0,0,w,h);}
+    g.fillStyle=cssVar("--surface");g.fillRect(0,0,w,h);
+    if(video&&video.videoWidth){
+      var sx0=Math.max(0,v.x),sy0=Math.max(0,v.y),sx1=Math.min(vw,v.x+v.w),sy1=Math.min(vh,v.y+v.h);
+      if(sx1>sx0&&sy1>sy0){
+        g.save();g.translate(w,0);g.scale(-1,1);       /* 거울처럼 뒤집기 */
+        g.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-v.x)*k,(sy0-v.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
+        g.restore();
+      }
+    }
     if(!m)return;
-    var k=w/vw;
+    /* 측정값은 뒤집은 영상 픽셀 좌표입니다. 보여 주는 범위 안의 자리로 옮깁니다. */
+    var ox=vw-v.x-v.w;
+    function X(x){return (x-ox)*k}
+    function Y(y){return (y-v.y)*k}
     g.lineWidth=2;g.strokeStyle=cssVar("--accent");
-    if(!eyes){g.strokeRect(m.box.x0*w,m.box.y0*h,(m.box.x1-m.box.x0)*w,(m.box.y1-m.box.y0)*h);return;}
+    if(!eyes){g.strokeRect(X(m.box.x0*vw),Y(m.box.y0*vh),(m.box.x1-m.box.x0)*vw*k,(m.box.y1-m.box.y0)*vh*k);return;}
     [m.R,m.L].forEach(function(e){
-      g.beginPath();g.moveTo(e.a.x*k,e.a.y*k);g.lineTo(e.up.x*k,e.up.y*k);g.lineTo(e.b.x*k,e.b.y*k);g.lineTo(e.low.x*k,e.low.y*k);g.closePath();g.stroke();
+      g.beginPath();g.moveTo(X(e.a.x),Y(e.a.y));g.lineTo(X(e.up.x),Y(e.up.y));g.lineTo(X(e.b.x),Y(e.b.y));g.lineTo(X(e.low.x),Y(e.low.y));g.closePath();g.stroke();
     });
     g.fillStyle=cssVar("--signal");
-    [m.R,m.L].forEach(function(e){g.beginPath();g.arc(e.iris.x*k,e.iris.y*k,3,0,Math.PI*2);g.fill();});
+    [m.R,m.L].forEach(function(e){g.beginPath();g.arc(X(e.iris.x),Y(e.iris.y),3,0,Math.PI*2);g.fill();});
   }
   function showDiag(m){
     diag.hidden=!(opt.diag&&mode!=="off"&&mode!=="loading");
@@ -136,7 +148,7 @@
     drawView(diagCv,m,true);
     var z=mode==="run"&&lastOut&&lastOut.zone?lastOut.zone:"-",r=Math.round,zoom=null;
     try{zoom=stream?stream.getVideoTracks()[0].getSettings().zoom:null;}catch(err){}
-    var cam=video&&video.videoWidth?"영상 "+video.videoWidth+"x"+video.videoHeight+(zoom?" · 줌 "+(+zoom).toFixed(1)+"배":"")+(crop?" · 잘라 읽기":"")+"\n":"";
+    var cam=video&&video.videoWidth?"영상 "+video.videoWidth+"x"+video.videoHeight+(zoom?" · 줌 "+(+zoom).toFixed(1)+"배":"")+(crop?" · 얼굴 "+Math.round(crop.fw)+"px 를 "+Math.round(crop.fw*crop.scale)+"px 로":"")+"\n":"";
     diagTx.textContent=m?
       cam+"홍채 "+m.irisPx.toFixed(1)+"px · 얼굴 너비 "+r((m.box.x1-m.box.x0)*100)+"%\n"+
       "좌우 "+r(m.yaw)+"° 상하 "+r(m.pitch)+"° 기울임 "+r(m.roll)+"°\n"+
@@ -267,11 +279,15 @@
       region=regions[regionIdx];regionIdx=(regionIdx+1)%regions.length;
     }
     if(!region)return video;
-    var k=Math.min(4,Math.max(1,640/region.w));       /* 잘라 낸 폭이 640쯤 되게 키우되 4배까지만 */
-    var w=Math.round(region.w*k),h=Math.round(region.h*k);
+    /* 따라가는 얼굴은 한가운데에 두고 얼굴 너비가 500px 이 되게 키웁니다. 찾는 중인 조각은 폭 640쯤으로. */
+    var r=region,k=r.scale||Math.min(4,Math.max(1,640/r.w));
+    var w=Math.round(r.w*k),h=Math.round(r.h*k),g=cropCv.getContext("2d");
     if(cropCv.width!==w)cropCv.width=w;
     if(cropCv.height!==h)cropCv.height=h;
-    cropCv.getContext("2d").drawImage(video,region.x,region.y,region.w,region.h,0,0,w,h);
+    /* 범위가 영상 밖으로 나간 부분은 회색으로 두고, 겹치는 부분만 옮겨 그립니다. */
+    var sx0=Math.max(0,r.x),sy0=Math.max(0,r.y),sx1=Math.min(vw,r.x+r.w),sy1=Math.min(vh,r.y+r.h);
+    g.fillStyle="#808080";g.fillRect(0,0,w,h);
+    if(sx1>sx0&&sy1>sy0)g.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-r.x)*k,(sy0-r.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
     return cropCv;
   }
   function read(res){

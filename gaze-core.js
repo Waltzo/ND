@@ -396,7 +396,8 @@
     var it={face:false,dist:false,angle:false,eyes:false,light:false};
     if(!m)return {ok:false,items:it,msg:"얼굴이 보이지 않습니다. 태블릿을 얼굴 쪽으로 돌려 주세요"};
     var bx=(m.box.x0+m.box.x1)/2,by=(m.box.y0+m.box.y1)/2,dx=bx-0.5,dy=by-0.5;
-    var off=Math.abs(dx)>0.2||Math.abs(dy)>0.22;
+    /* 얼굴은 잘라서 한가운데로 옮겨 읽으므로, 영상 가장자리에 너무 붙었을 때만 옮겨 달라고 합니다. */
+    var off=Math.abs(dx)>0.38||Math.abs(dy)>0.38;
     it.light=light==null||light>=LIMIT.light;
     it.face=!m.cut&&!off;
     /* 너무 가까움: 얼굴이 화면을 거의 다 채움 */
@@ -446,11 +447,15 @@
     });
     return out;
   }
-  /* 찾은 얼굴(뒤집은 0~1 좌표의 box) 둘레를 넉넉히 잡은 정사각형 범위(원본 영상 픽셀) */
+  /* 찾은 얼굴(뒤집은 0~1 좌표의 box)이 한가운데 오는 정사각형 범위(원본 영상 픽셀).
+     얼굴이 영상 가장자리에 있으면 범위가 영상 밖으로 나갑니다(그 부분은 빈 채로 둡니다).
+     fw 는 얼굴 너비(픽셀), scale 은 얼굴 너비가 FACE_PX 가 되게 하는 확대 배율입니다. */
+  var FACE_PX=500,CROP_MARGIN=1.5,CROP_MAX=1280;
   function cropAround(box,vw,vh){
     var x0=(1-box.x1)*vw,x1=(1-box.x0)*vw,y0=box.y0*vh,y1=box.y1*vh;
-    var side=Math.max(x1-x0,y1-y0)*1.8,W=Math.min(vw,side),H=Math.min(vh,side);
-    return {x:clamp((x0+x1)/2-W/2,0,vw-W),y:clamp((y0+y1)/2-H/2,0,vh-H),w:W,h:H};
+    var fw=Math.max(1,x1-x0),side=Math.max(fw,y1-y0)*CROP_MARGIN;
+    var k=Math.min(FACE_PX/fw,CROP_MAX/side);            /* 그림이 너무 커지지 않게만 막습니다 */
+    return {x:(x0+x1)/2-side/2,y:(y0+y1)/2-side/2,w:side,h:side,fw:fw,scale:k};
   }
   /* 읽은 얼굴이 말이 되는지. 잘라 넣은 범위(region, 없으면 화면 전체)에 비해 얼굴이 터무니없이 작거나,
      홍채와 눈 너비의 비율이 사람 눈과 동떨어지면 잘못 읽은 것으로 보고 버립니다. */
@@ -512,7 +517,7 @@
     OneEuro:OneEuro,zoneOf:zoneOf,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
     BlinkDetector:BlinkDetector,Tracker:Tracker,
     Collector:Collector,HoldGate:HoldGate,
-    searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
+    FACE_PX:FACE_PX,searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
     postureCheck:postureCheck,quality:quality,needsLowRate:needsLowRate,FpsMeter:FpsMeter,
     baselineOf:baselineOf,MoveDetector:MoveDetector
   };
