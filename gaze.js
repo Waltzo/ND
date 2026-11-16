@@ -22,6 +22,9 @@
   /* 먼 얼굴: 얼굴 둘레만 잘라 키워서 읽습니다. crop 은 지금 따라가는 범위, 없으면 조각을 돌아가며 찾습니다. */
   var crop=null,cropCv=null,region=null,regions=null,regionIdx=0,miss=0;
   var tuneAt=0,resTried=false,zoomDead=false;
+  /* 쉬기: 화면을 안 보고 있으면 입력을 멈추고 쉽니다. 다시 4초 동안 화면을 보면 보정부터 다시 합니다. */
+  var SLEEP_AFTER=8000,WAKE_LOOK=4000;
+  var awaySince=null,lookSince=null,lookLast=0;
   var flush=false,flushed=false;   /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
   var light=null,lightAt=0,lightCv=null;
   var blinkIdx=null;
@@ -93,7 +96,8 @@
     load:["msg","sub","quit"],
     posture:["view","msg","list","bar","sub","quit"],
     calib:["dot","cap"],
-    result:["msg","sub"]
+    result:["msg","sub"],
+    sleep:["msg","bar","sub"]
   };
   function screen(name){
     ov.hidden=!name;
@@ -385,6 +389,7 @@
     else if(mode==="quick")stepQuick(m,now);
     else if(mode==="verify")stepVerify(m,now);
     else if(mode==="run")stepRun(m,now);
+    else if(mode==="sleep")stepSleep(m,now);
   }
 
   /* ---------- 자세 점검 ---------- */
@@ -557,17 +562,46 @@
 
   /* ---------- 쓰는 중 ---------- */
   function enterRun(){
-    mode="run";
+    mode="run";awaySince=null;
     tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
   }
+  /* ---------- 쉬기 ---------- */
+  function enterSleep(){
+    mode="sleep";N.lock(true);N.setGaze(null);chip.hidden=true;
+    lookSince=null;lookLast=0;
+    screen("sleep");
+    ui.msg.textContent="쉬는 중입니다";
+    ui.sub.textContent="화면을 4초 동안 보고 있으면 시선을 다시 맞추고 시작합니다.";
+    ui.bar.firstChild.style.setProperty("--p",0);
+  }
+  function stepSleep(m,now){
+    tracker.away=0.15;                                 /* 화면 안을 볼 때만 보는 것으로 칩니다 */
+    var out=tracker.step(m,now);
+    lastOut=out;
+    if(out.pt&&!out.closed){if(lookSince===null)lookSince=now;lookLast=now;}
+    else if(now-lookLast>600)lookSince=null;            /* 깜빡임 같은 짧은 끊김은 넘어갑니다 */
+    var p=lookSince===null?0:Math.min(1,(now-lookSince)/WAKE_LOOK);
+    ui.bar.firstChild.style.setProperty("--p",p);
+    if(p>=1){
+      N.speak("시선을 다시 맞춥니다");
+      wantFull=false;enterPosture();                    /* 자세 점검 뒤 가운데 한 점 */
+    }
+  }
+
   function stepRun(m,now){
     /* 조이스틱은 화면 밖을 봐도 그쪽 가장자리에 붙은 것으로 칩니다. */
     tracker.away=N.nav()==="joy"?1.5:0.3;
     var out=tracker.step(m,now);
     lastOut=out;
     N.setGaze(out.pt,out.zone);
+    /* 화면을 보고 있지 않은 채로(얼굴을 놓침, 화면 밖을 봄, 눈을 오래 감음) 시간이 지나면 쉽니다. */
+    if(out.pt)awaySince=null;
+    else{
+      if(awaySince===null)awaySince=now;
+      if(now-awaySince>=SLEEP_AFTER){enterSleep();return;}
+    }
     if(out.blink)N.blink();
     if(out.long)N.longBlink();
     /* 태블릿이 옮겨진 것 같으면 입력을 잠그고 자세부터 다시 봅니다. */

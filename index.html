@@ -281,7 +281,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <div class="field" data-input="camera">
     <label class="field__top" for="blinkMax"><span>깜빡임으로 치는 가장 긴 시간</span><output id="blinkMaxOut">1.0초</output></label>
     <input type="range" id="blinkMax" min="0.5" max="2" step="0.1" value="1">
-    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다. 다만 지우기 칸에서는 이보다 길게(2.5초까지) 감았다 뜨면 글자 하나를 통째로 지웁니다.</p>
+    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다. 다만 지우기 칸에서는 이보다 길게(2.5초까지) 감았다 뜨면 글자 하나를, 4초 안에 한 번 더 그렇게 하면 전체를 지웁니다.</p>
   </div>
   <div class="field" data-input="camera">
     <label class="field__top" for="eyeAlarm"><span>눈을 오래 감으면 호출음</span><output id="eyeAlarmOut">3초</output></label>
@@ -315,8 +315,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>자음도 모음도 글자를 확인하면 바로 입력되고 처음 화면으로 돌아옵니다.</li>
       <li>쌍자음 칸을 확인하면 ㄱ은 ㄲ으로, 이중모음 칸을 확인하면 ㅏ는 ㅑ, ㅗ는 ㅛ, ㅐ는 ㅒ, ㅘ는 ㅙ, ㅝ는 ㅞ로 바뀝니다.</li>
       <li>ㅐ ㅔ ㅘ ㅝ ㅚ ㅢ ㅟ 는 복합 모음 묶음에 있습니다. ㅘ는 ㅗ ㅏ, ㅝ는 ㅜ ㅓ 순서로 이어서 골라도 합쳐집니다.</li>
-      <li>내가 쓴 말 칸을 확인하면 쓴 글을 말합니다.</li>
-      <li>지우기 칸은 확인하면 낱자 하나를, 눈을 길게 감았다 뜨면 글자 하나를 통째로 지웁니다. 마우스는 0.6초 넘게 눌렀다 뗍니다.</li>
+      <li>내가 쓴 말 칸을 확인하면 쓴 글을 말합니다. 말한 뒤에도 글은 남아 있습니다.</li>
+      <li>지우기 칸은 짧게 두 번 깜빡이면 낱자 하나를, 길게 한 번 감았다 뜨면 글자 하나를, 길게 두 번이면 전체를 지웁니다. 마우스는 0.6초 넘게 눌렀다 떼는 것이 길게 깜빡임입니다.</li>
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
       <li>지니야 칸은 쓴 말을 기가지니에게 명령으로 전합니다. 쓴 말이 없으면 호출어만 말합니다.</li>
       <li>묶음 안에서는 가운데가 뒤로입니다.</li>
@@ -399,7 +399,7 @@ function compose(list){
 
   function mainMap(){
     var m={1:{type:"words",kind:"W",label:"자주 쓰는 단어",sub:"8개"},
-           2:{type:"back",kind:"F",label:"지우기",sub:"확인: 낱자 · 길게 감기: 한 글자"},
+           2:{type:"back",kind:"F",label:"지우기",sub:"두 번: 낱자 · 길게: 한 글자 · 길게 두 번: 전체"},
            3:{type:"genie",kind:"S",label:S.wake,sub:"쓴 말을 기가지니에게"},
            5:{type:"input"},
            8:{type:"num",kind:"N"}};
@@ -576,6 +576,8 @@ function compose(list){
   }
 
   /* 지우기 칸을 보면서 눈을 길게 감았다 뜨면 한 글자(낱자가 아니라 글자 하나)를 통째로 지웁니다. */
+  var lastLong=0;           /* 지우기 칸에서 길게 깜빡인 때 */
+  var LONG_GAP=4000;        /* 이 안에 한 번 더 길게 깜빡이면 전체 지우기 */
   function longBlink(){
     if(!raw||dlg.open||locked)return;
     var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw));
@@ -583,13 +585,20 @@ function compose(list){
     var sz=slot(z),d=sz?cur[sz]:null;
     if(!d||d.type!=="back")return;
     firstBlink=0;
-    var text=compose(list);
-    if(text){
-      var want=text.slice(0,-1);
-      do{list.pop();}while(list.length&&compose(list)!==want);
+    var now=performance.now(),text=compose(list);
+    if(lastLong&&now-lastLong<LONG_GAP){
+      /* 길게 두 번: 전체 지우기 */
+      list=[];lastLong=0;
+    }else{
+      /* 길게 한 번: 글자 하나 */
+      if(text){
+        var want=text.slice(0,-1);
+        do{list.pop();}while(list.length&&compose(list)!==want);
+      }
+      lastLong=now;
     }
     armed=false;dwellT=0;
-    render();tick(660,0.2);
+    render();tick(lastLong?660:330,0.2);
     var t=tiles[sz];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
 
@@ -636,11 +645,12 @@ function compose(list){
     var d=cur[z],view0=view;
     if(!d||d.type==="value")return;
     if(d.type==="input"){
-      /* 내가 쓴 말 칸을 고르면 쓴 글을 말합니다 */
+      /* 내가 쓴 말 칸을 고르면 쓴 글을 말합니다. 말한 뒤에도 글은 남겨 둡니다(지우기 칸에서 길게 두 번 깜빡이면 전체 지우기). */
       var text=compose(list).trim();
       armed=false;dwellT=0;
       if(!text)return;
-      speak(text);past.push(text);list=[];
+      speak(text);
+      if(past[past.length-1]!==text)past.push(text);
     }
     else if(d.type==="num"){view="N";num=0;}
     else if(d.type==="step"){num=Math.max(0,Math.min(999,num+d.d));}
