@@ -101,6 +101,7 @@ button,input{font:inherit;color:inherit}
 .input__past li{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
 .input__back{font-family:var(--font-display);font-weight:700;font-size:clamp(20px,4.2vmin,36px);color:var(--accent);border:2px solid var(--accent);border-radius:12px;padding:2px 18px}
 .input__back[hidden],.input__past[hidden]{display:none}
+.input__hint:empty{display:none}
 .input__hint{font-size:13px;background:var(--ink);color:var(--bg);border-radius:10px;padding:5px 10px;align-self:center;max-width:100%}
 
 .gaze{position:absolute;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:2px solid var(--ink);background:color-mix(in srgb,var(--signal) 55%,transparent);pointer-events:none;z-index:2}
@@ -546,14 +547,6 @@ function compose(list){
     else{say(DIR[z]+"에는 칸이 없습니다");tick(330,0.08);}
     armed=false;dwellT=0;
   }
-  function joyPrompt(z){
-    var how=S.pick==="double"?"두 번 깜빡이세요":"계속 보세요";
-    if(z===5)return prompt(focus);
-    var t=neighbor(z),d=t?cur[t]:null;
-    if(!t)return DIR[z]+"에는 칸이 없습니다";
-    return DIR[z]+" 칸"+(d&&d.label?"("+d.label+")":"")+"을 가운데로 옮기려면 "+how;
-  }
-
   function zoneAt(g){
     var col=Math.max(0,Math.min(2,Math.floor(g.x/(W/3)))),row=Math.max(0,Math.min(2,Math.floor(g.y/(H/3))));
     return row*3+col+1;
@@ -689,26 +682,6 @@ function compose(list){
     var t=tiles[z];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
 
-  function prompt(z){
-    var how=S.pick==="double"?"두 번 깜빡이세요":"계속 보세요",d=cur[z];
-    if(!d)return "빈 칸입니다";
-    if(d.type==="input")return "쉬는 자리입니다. 고를 칸을 보세요";
-    if(d.type==="group")return "이 묶음을 열려면 "+how;
-    if(d.type==="num")return "숫자를 열려면 "+how;
-    if(d.type==="value")return "지금 숫자는 "+d.label+" 입니다";
-    if(d.type==="step")return d.label+" 하려면 "+how;
-    if(d.type==="numcommit")return num+" 입력하려면 "+how;
-    if(d.type==="words")return "자주 쓰는 단어를 열려면 "+how;
-    if(d.type==="word")return d.label+" 넣으려면 "+how;
-    if(d.type==="dbl")return d.label+"으로 바꾸려면 "+how;
-    if(d.type==="char")return d.label+(d.kind==="C"?" 입력하려면 ":" 고르려면 ")+how;
-    if(d.type==="commit")return pend?(list[list.length-1]+" 입력하려면 "+how):"모음을 먼저 고르세요";
-    if(d.type==="back")return "한 글자 지우려면 "+how;
-    if(d.type==="speak")return "말하려면 "+how;
-    if(d.type==="genie")return "기가지니에게 말하려면 "+how;
-    return (pend?"고른 모음을 버리고 ":"")+"뒤로 가려면 "+how;
-  }
-
   var last=performance.now();
   function frame(now){
     var dt=Math.min(0.05,(now-last)/1000);last=now;
@@ -726,7 +699,7 @@ function compose(list){
 
     if(!g){text=S.input==="camera"?"시선을 놓쳐 멈췄습니다":"시선이 자판 밖에 있어 멈췄습니다";}
     else if(now<msgUntil){text=msg;}
-    else if(dbl){text=firstBlink?"한 번 더 깜빡이세요":(S.nav==="joy"?joyPrompt(zone):prompt(zone));}
+    else if(dbl){text=firstBlink?"한 번 더 깜빡이세요":"";}
     else{
       var sz=slot(zone),d=sz?cur[sz]:null;
       /* 조이스틱의 방향은 옮길 칸이 있으면, 그 밖에는 고를 수 있는 칸이면 응시 시간을 셉니다 */
@@ -735,7 +708,7 @@ function compose(list){
         dwellT+=dt;
         if(dwellT>=S.dwell){confirm(zone);}
       }
-      text=now<msgUntil?msg:(S.nav==="joy"?joyPrompt(zone):prompt(zone));
+      text=now<msgUntil?msg:"";
     }
 
     var el=zone?(tiles[slot(zone)]||null):null;
