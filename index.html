@@ -63,6 +63,8 @@ button,input{font:inherit;color:inherit}
 .stage.is-joy .tile{transform:translate(calc(var(--sx,0)*(100% + var(--gap))),calc(var(--sy,0)*(100% + var(--gap))));transition:opacity .12s,transform .22s ease-out}
 .stage.is-joy .tile.is-focus{opacity:1;border-color:var(--ink)}
 .tile.is-look{opacity:1;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+/* 깜빡임 한 번이 읽힌 칸. 다음 깜빡임은 어디를 보고 있든 이 칸을 고릅니다. */
+.tile.is-first,.stage.is-joy .tile.is-first{opacity:1;border-color:var(--signal);box-shadow:0 0 0 3px var(--signal)}
 .tile[hidden]{display:none}
 .tile--span{grid-column:span 2}
 .tile--group{gap:6px}
@@ -230,6 +232,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     </div>
     <p data-input="mouse">깜빡임은 마우스 클릭이나 스페이스바로 대신합니다. 빠르게 두 번 누르세요.</p>
     <p data-input="camera">고를 칸을 보면서 눈을 또렷하게 두 번 감았다 뜨세요.</p>
+    <p>한 번 깜빡이면 그 칸 테두리가 주황색이 됩니다. 그 뒤에는 눈이 다른 칸으로 가도, 한 번 더 깜빡이면 주황색 칸이 골라집니다.</p>
   </div>
 
   <div class="field" data-mode="double">
@@ -384,6 +387,7 @@ function compose(list){
   var cur={};               /* 지금 각 칸이 하는 일 */
   var list=[],past=[];
   var raw=null,jit={x:0,y:0},zone=null,lookEl=null;
+  var firstEl=null,shownFirst=null;   /* 첫 깜빡임이 읽힌 칸, 지금 주황 테두리가 그려진 칸 */
   var firstBlink=0,firstZone=null,dwellT=0,armed=true,msg="",msgUntil=0;
   var W=1,H=1,SX=0,SY=0;     /* 자판 영역의 크기와 화면에서의 위치 */
   var focus=5;              /* 조이스틱 방식에서 가운데에 와 있는 칸 */
@@ -454,7 +458,7 @@ function compose(list){
         html='<span class="tile__kind" style="--k:var('+KIND[d.kind][1]+')">'+KIND[d.kind][0]+'</span>'+
           '<span class="tile__text">'+esc(d.label)+'</span><span class="tile__sub">'+esc(d.sub)+'</span>';
       }
-      t.className=cls+(t===lookEl?" is-look":"")+(S.nav==="joy"&&z===focus?" is-focus":"");
+      t.className=cls+(t===lookEl?" is-look":"")+(t===shownFirst?" is-first":"")+(S.nav==="joy"&&z===focus?" is-focus":"");
       t.innerHTML=html+'<div class="ring"></div>';
     }
     hintEl=$("hint");if(hintEl)hintEl.textContent=lastHint;
@@ -562,8 +566,9 @@ function compose(list){
   function blink(){
     if(S.pick!=="double"||!raw||dlg.open||locked)return;
     var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw)),now=performance.now();
-    if(firstBlink&&firstZone===z&&now-firstBlink<S.gap*1000){firstBlink=0;confirm(z);}
-    else{firstBlink=now;firstZone=z;tick(660,0.04);}
+    /* 첫 깜빡임이 읽힌 뒤에는, 그사이 눈이 다른 칸으로 가 있어도 처음 그 칸을 고릅니다. */
+    if(firstBlink&&now-firstBlink<S.gap*1000){firstBlink=0;confirm(firstZone);}
+    else{firstBlink=now;firstZone=z;firstEl=tiles[slot(z)]||null;tick(660,0.04);}
   }
 
   /* 지우기 칸을 보면서 눈을 길게 감았다 뜨면 한 글자(낱자가 아니라 글자 하나)를 통째로 지웁니다. */
@@ -695,7 +700,13 @@ function compose(list){
     if(S.nav==="joy")z=joyHold(g?joyZone(g):null,now);
     else if(g)z=S.input==="camera"&&camZone?camZone:zoneAt(g);
     if(z!==zone){zone=z;dwellT=0;armed=true;}
-    if(firstBlink&&(now-firstBlink>=S.gap*1000||firstZone!==zone))firstBlink=0;
+    if(firstBlink&&now-firstBlink>=S.gap*1000)firstBlink=0;
+    var fe=firstBlink&&dbl?firstEl:null;
+    if(fe!==shownFirst){
+      if(shownFirst){shownFirst.classList.remove("is-first");var rf=shownFirst.querySelector(".ring");if(rf&&shownFirst!==lookEl)rf.style.setProperty("--p",0);}
+      if(fe)fe.classList.add("is-first");
+      shownFirst=fe;
+    }
 
     if(!g){text=S.input==="camera"?"시선을 놓쳐 멈췄습니다":"시선이 자판 밖에 있어 멈췄습니다";}
     else if(now<msgUntil){text=msg;}
@@ -717,9 +728,12 @@ function compose(list){
       if(el)el.classList.add("is-look");
       lookEl=el;
     }
-    if(lookEl){
-      var p=dbl?(firstBlink?Math.max(0,1-(now-firstBlink)/(S.gap*1000)):0):Math.min(1,dwellT/S.dwell);
-      var r1=lookEl.querySelector(".ring");if(r1)r1.style.setProperty("--p",p);
+    /* 고리: 두 번 깜빡임은 첫 깜빡임이 읽힌 칸에 남은 시간을, 응시는 보는 칸에 응시 시간을 그립니다. */
+    var ringEl=dbl?shownFirst:lookEl;
+    if(lookEl&&lookEl!==ringEl){var r2=lookEl.querySelector(".ring");if(r2)r2.style.setProperty("--p",0);}
+    if(ringEl){
+      var p=dbl?Math.max(0,1-(now-firstBlink)/(S.gap*1000)):Math.min(1,dwellT/S.dwell);
+      var r1=ringEl.querySelector(".ring");if(r1)r1.style.setProperty("--p",p);
     }
     /* 조이스틱에서 방향 사다리꼴 안에 있으면 시선 점을 그쪽 칸 한가운데에 붙입니다. */
     var snap=S.nav==="joy"&&!!g&&!!DIR[zone];
