@@ -318,6 +318,14 @@ test("화면 밖을 보면 입력을 멈춘다",function(){
   for(i=0;i<40;i++){t.v+=33;out=tr.step(meas({gx:3.5,gy:0.5}),t.v);}
   assert.strictEqual(out.pt,null);assert.strictEqual(out.why,"away");
 });
+test("화면 밖 허용 폭을 넓히면 가장자리에 붙은 점으로 읽는다",function(){
+  var tr=tracker(),t={v:0},out,i;
+  tr.away=1.5;
+  look(tr,5,400,t);
+  for(i=0;i<40;i++){t.v+=33;out=tr.step(meas({gx:1.9,gy:0.5}),t.v);}
+  assert.ok(out.pt,"화면 오른쪽 밖을 봐도 입력이 살아 있어야 합니다");
+  assert.strictEqual(out.pt.x,1);assert.strictEqual(out.zone,6);
+});
 test("눈을 떠도 나오는 감김 점수(c0)는 감은 것으로 치지 않는다",function(){
   var tr=tracker(),t={v:0,log:[]};
   tr.model.c0=0.45;

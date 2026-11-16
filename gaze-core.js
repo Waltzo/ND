@@ -263,6 +263,7 @@
     this.ear=new EarCloser();
     this.settleMs=o.settleMs==null?120:o.settleMs;
     this.longMs=o.longMs==null?2500:o.longMs;   /* 길게 깜빡임으로 치는 가장 긴 시간 */
+    this.away=o.away==null?0.3:o.away;          /* 화면 밖으로 이만큼(화면 크기 기준) 넘게 나가면 입력을 멈춤 */
     this.reset();
   }
   Tracker.prototype.reset=function(){
@@ -314,7 +315,8 @@
     }
     this.jump=false;this.lastRaw=p;
     var x=this.fx.filter(p.x,t/1000),y=this.fy.filter(p.y,t/1000);
-    if(x<-0.3||x>1.3||y<-0.3||y>1.3){this.lastPt=null;this.lastZone=null;this.hold.reset();out.why="away";return out;}
+    var aw=this.away;
+    if(x<-aw||x>1+aw||y<-aw||y>1+aw){this.lastPt=null;this.lastZone=null;this.hold.reset();out.why="away";return out;}
     var pt={x:clamp(x,0,1),y:clamp(y,0,1)};
     this.lastPt=pt;this.lastZone=this.hold.update(zoneOf(pt.x,pt.y),t);
     out.pt=pt;out.zone=this.lastZone;
