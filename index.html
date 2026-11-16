@@ -143,6 +143,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .gz__bar{width:min(60%,320px);height:10px;border-radius:5px;background:var(--line);overflow:hidden}
 .gz__bar i{display:block;height:100%;width:calc(var(--p,0)*100%);background:var(--signal)}
 .gz .btn{flex:none}
+.gz__dot{position:absolute;left:50%;top:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(var(--accent) calc(var(--p,0)*360deg),var(--line) 0)}
+.gz__dot b{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--signal);border:3px solid var(--bg)}
+.gz__dot b::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink)}
+.gz__cap{position:absolute;left:0;right:0;bottom:8px;font-size:clamp(16px,3vmin,24px);font-weight:500}
 .gz-video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
 
 /* 알림: 카메라를 못 쓸 때처럼 보호자에게 알릴 말 */
@@ -230,6 +235,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-v="camera" aria-pressed="false">카메라</button>
     </div>
     <p>카메라는 얼굴을 보고 시선과 깜빡임을 읽습니다. 영상은 이 기기 안에서만 쓰고, 어디에도 보내거나 저장하지 않습니다.</p>
+  </div>
+  <div class="field" data-input="camera">
+    <div class="row"><button class="btn" id="recalBtn" type="button">다시 보정</button></div>
+    <p>태블릿을 옮기면 자세를 다시 확인하고 가운데 한 점만 보면 됩니다. 그래도 잘 맞지 않으면 다시 보정을 누르세요. 9칸을 차례로 봅니다.</p>
   </div>
 
   <h2>시안 시험용</h2>

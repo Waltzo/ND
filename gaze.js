@@ -23,6 +23,15 @@
   var lastM=null;            /* 가장 최근 측정값(진단 표시용) */
   var gate=new C.HoldGate(1000);
   var lastSaid="",saidAt=0,pendMsg="",pendAt=0;
+  var sim=false;             /* 카메라 없이 측정값을 직접 넣어 시험하는 중 */
+
+  /* 보정 */
+  var KEY="nundam-gaze";
+  var ORDER=[5,1,2,3,6,9,8,7,4];   /* 가운데에서 시작해 한 바퀴 */
+  var model=null,base=null,wantFull=true,tries=0;
+  var col=new C.Collector(),calIdx=0,calSamples=[],calMs=[],calC=[],calLost=null;
+  var tracker=null,mover=null,ear=new C.EarCloser();
+  var resultT=0;
 
   /* ---------- 화면 ---------- */
   var ov=document.createElement("div");
@@ -136,10 +145,13 @@
   }
 
   /* ---------- 켜기, 끄기 ---------- */
-  function start(){
+  function start(o){
     if(mode!=="off")return;
     var id=++runId;
+    sim=!!(o&&o.sim);tries=0;
+    loadCal();
     mode="loading";N.lock(true);
+    if(sim){light=null;enterPosture();return;}
     screen("load");
     ui.msg.textContent="카메라를 준비하고 있습니다";
     ui.sub.textContent="처음에는 얼굴 인식 모델을 내려받느라 시간이 걸립니다.";
@@ -156,7 +168,7 @@
     });
   }
   function stop(){
-    runId++;mode="off";
+    runId++;mode="off";clearTimeout(resultT);
     release();screen(null);
     N.setGaze(null);N.lock(false);
   }
@@ -216,6 +228,8 @@
   }
   function onFrame(m,now){
     if(mode==="posture")stepPosture(m,now);
+    else if(mode==="calib")stepCalib(m,now);
+    else if(mode==="quick")stepQuick(m,now);
     else if(mode==="run")stepRun(m,now);
   }
 
@@ -236,18 +250,135 @@
     if(prog>=1)afterPosture();
   }
   function afterPosture(){
-    mode="run";screen(null);N.lock(false);
+    if(wantFull||!model)enterCalib();else enterQuick();
+  }
+
+  /* ---------- 보정 ---------- */
+  function loadCal(){
+    model=null;base=null;wantFull=true;
+    try{
+      var d=JSON.parse(localStorage.getItem(KEY));
+      if(d&&d.v===1&&d.model&&d.model.wx&&d.base){model=d.model;base=d.base;wantFull=false;}
+    }catch(err){}
+  }
+  function saveCal(){
+    try{localStorage.setItem(KEY,JSON.stringify({v:1,model:model,base:base}));}catch(err){}
+  }
+  /* 원래 감김 점수. 보정 중에는 아직 사람마다의 기준(c0)을 모르므로 그대로 씁니다. */
+  function closedRaw(m){return m?(m.closed==null?ear.update(m.open):m.closed):0}
+  function target(z,text){
+    var c=C.zoneCenter(z);
+    ui.dot.style.left=c.x*100+"%";ui.dot.style.top=c.y*100+"%";
+    ui.dot.style.setProperty("--p",0);
+    ui.cap.textContent=text;
+    col.start(performance.now());calLost=null;
+  }
+  /* 얼굴을 오래 놓치면 자세 점검으로 돌아갑니다. */
+  function lostTooLong(m,now){
+    if(m){calLost=null;return false;}
+    if(calLost===null)calLost=now;
+    return now-calLost>3000;
+  }
+  function enterCalib(){
+    mode="calib";N.lock(true);
+    calIdx=0;calSamples=[];calMs=[];calC=[];
+    screen("calib");
+    target(ORDER[0],"주황색 점을 보고 계세요 (1 / 9)");
+    N.speak("주황색 점을 따라 보세요");
+  }
+  function stepCalib(m,now){
+    if(lostTooLong(m,now)){enterPosture();return;}
+    ui.dot.style.setProperty("--p",col.update(m,closedRaw(m),now));
+    if(!col.done())return;
+    var z=ORDER[calIdx],c=C.zoneCenter(z);
+    col.buf.forEach(function(s){calSamples.push({f:s.f,x:c.x,y:c.y});calMs.push(s.m);});
+    calC.push(C.median(col.buf.map(function(s){return s.c})));
+    N.tick(880,0.08);
+    if(++calIdx<ORDER.length)target(ORDER[calIdx],"주황색 점을 보고 계세요 ("+(calIdx+1)+" / 9)");
+    else finishCalib();
+  }
+  /* 점마다 눈동자 위치가 달라야 보정이 됩니다. 거의 같으면 눈이 점을 따라가지 않은 것입니다. */
+  function eyesMoved(){
+    var hx=[],hy=[],i,n=calMs.length/ORDER.length;
+    for(i=0;i<ORDER.length;i++){
+      var part=calMs.slice(i*n,(i+1)*n);
+      hx.push(C.median(part.map(function(m){return m.hx})));
+      hy.push(C.median(part.map(function(m){return m.hy+m.ly})));
+    }
+    function range(a){return Math.max.apply(null,a)-Math.min.apply(null,a)}
+    return range(hx)>=0.02&&range(hy)>=0.01;
+  }
+  function finishCalib(){
+    var fit=eyesMoved()?C.ridgeFit(calSamples):null;
+    if(!fit){
+      if(++tries>=3){fail("보정을 마치지 못했습니다.");return;}
+      mode="result";screen("result");
+      ui.msg.textContent="눈동자 움직임을 읽지 못했습니다";
+      ui.sub.textContent="자세를 확인하고 다시 보정합니다.";
+      N.speak("눈동자 움직임을 읽지 못했습니다. 다시 보정합니다");
+      resultT=setTimeout(function(){if(mode==="result"){wantFull=true;enterPosture();}},3000);
+      return;
+    }
+    /* 눈을 뜨고 있어도 나오는 감김 점수. 아래 줄을 볼 때 가장 큽니다. */
+    fit.c0=C.clamp(Math.max.apply(null,calC),0,0.6);
+    model=fit;base=C.baselineOf(calMs);wantFull=false;tries=0;
+    saveCal();
+    afterCalib();
+  }
+  function afterCalib(){enterRun();}
+
+  /* 빠른 재보정: 가운데 한 점만 보고 치우침을 고칩니다. */
+  function enterQuick(){
+    mode="quick";N.lock(true);
+    screen("calib");
+    target(5,"가운데 점을 보고 계세요");
+    N.speak("가운데 점을 보세요");
+  }
+  function stepQuick(m,now){
+    if(lostTooLong(m,now)){enterPosture();return;}
+    ui.dot.style.setProperty("--p",col.update(m,closedRaw(m),now));
+    if(!col.done())return;
+    N.tick(880,0.08);
+    if(!C.biasFix(model,col.buf.map(function(s){return s.f}))){enterCalib();return;}
+    base=C.baselineOf(col.buf.map(function(s){return s.m}));
+    saveCal();
+    enterRun();
+  }
+  function recalibrate(){
+    if(mode==="off"||mode==="loading")return;
+    clearTimeout(resultT);
+    wantFull=true;tries=0;N.closeSettings();enterPosture();
   }
 
   /* ---------- 쓰는 중 ---------- */
+  function enterRun(){
+    mode="run";
+    tracker=new C.Tracker({model:model});
+    mover=new C.MoveDetector(base);
+    screen(null);N.lock(false);
+  }
   function stepRun(m,now){
-    N.setGaze(null);
+    var out=tracker.step(m,now);
+    N.setGaze(out.pt,out.zone);
+    /* 태블릿이 옮겨진 것 같으면 입력을 잠그고 자세부터 다시 봅니다. */
+    if(mover.update(m,now)){
+      N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
+      enterPosture();
+    }
   }
 
+  /* 시험용: 카메라 대신 측정값을 직접 넣습니다(start({sim:true}) 로 켰을 때만). */
+  function feed(m){
+    if(!sim||mode==="off")return;
+    lastM=m;onFrame(m,performance.now());
+  }
+  var recalBtn=document.getElementById("recalBtn");
+  if(recalBtn)recalBtn.addEventListener("click",recalibrate);
+
   window.NundamGaze={
-    start:start,stop:stop,
+    start:start,stop:stop,recalibrate:recalibrate,feed:feed,
     mode:function(){return mode},
     /* 진단과 시험용: 지금 상태를 그대로 보여 줍니다 */
-    debug:function(){return {mode:mode,m:lastM,light:light}}
+    debug:function(){return {mode:mode,m:lastM,light:light,model:model,base:base}}
   };
 })();
