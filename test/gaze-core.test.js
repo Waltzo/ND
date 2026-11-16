@@ -160,6 +160,95 @@ test("표본 모으기: 떨림이 큰 카메라에서도 끝난다",function(){
   assert.ok(col.done(),"30초 안에 끝나야 합니다. 진행 "+col.progress());
 });
 
+console.log("머리 각도 보정 (3차원 모의 얼굴)");
+/* 카메라가 화면 위 가운데에 있고, 50cm 앞에 머리가 있다고 놓습니다. 길이 단위 mm.
+   좌표: X 환자의 오른쪽, Y 아래, Z 카메라에서 환자 쪽. 눈은 화면의 목표점을 실제로 향하게 만듭니다.
+   o: tx, ty 보는 곳(0~1), yaw 오른쪽으로 돌림(도), pitch 아래로 숙임, roll 시계 방향 기울임(뒤집은 화면 기준) */
+var SCREEN={w:250,h:170,top:10};
+function face3d(o){
+  var k=Math.PI/180,ps=(o.yaw||0)*k,th=(o.pitch||0)*k,ro=(o.roll||0)*k;
+  function rot(v){
+    var x=v[0],y=v[1],z=v[2],y2=y*Math.cos(th)-z*Math.sin(th),z2=y*Math.sin(th)+z*Math.cos(th);   /* 숙임 */
+    return [x*Math.cos(ps)-z2*Math.sin(ps),y2,x*Math.sin(ps)+z2*Math.cos(ps)];                      /* 돌림 */
+  }
+  var ex=rot([Math.cos(ro),Math.sin(ro),0]),ey=rot([-Math.sin(ro),Math.cos(ro),0]),ez=rot([0,0,-1]);
+  var H=[o.hx||0,80,o.dist||500];
+  function W(a,b,c){return [H[0]+a*ex[0]+b*ey[0]+c*ez[0],H[1]+a*ex[1]+b*ey[1]+c*ez[1],H[2]+a*ex[2]+b*ey[2]+c*ez[2]]}
+  var T=[-SCREEN.w/2+SCREEN.w*o.tx,SCREEN.top+SCREEN.h*o.ty,0],lm=[],i;
+  function put(i,p){lm[i]={x:0.5-F*p[0]/p[2]/VW,y:0.5+F*p[1]/p[2]/VH,z:(p[2]-H[2])/VW}}
+  for(i=0;i<478;i++)put(i,H);
+  put(10,W(0,-70,0));put(152,W(0,95,0));put(234,W(72,20,-30));put(454,W(-72,20,-30));put(1,W(0,35,28));
+  function eye(e,cx,sgn){
+    var C0=W(cx,0,-12),d=[T[0]-C0[0],T[1]-C0[1],T[2]-C0[2]],n=Math.sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+    d=[d[0]/n,d[1]/n,d[2]/n];
+    /* 머리 기준 시선 성분 */
+    var a=d[0]*ex[0]+d[1]*ex[1]+d[2]*ex[2],b=d[0]*ey[0]+d[1]*ey[1]+d[2]*ey[2],c=d[0]*ez[0]+d[1]*ez[1]+d[2]*ez[2];
+    var ia=cx+12*a,ib=12*b,ic=-12+12*c;
+    put(e.outer,W(cx+sgn*15,0,0));put(e.inner,W(cx-sgn*15,0,0));
+    put(e.up,W(cx,-5+0.7*12*b,0));put(e.low,W(cx,5,0));
+    put(e.iris,W(ia,ib,ic));
+    put(e.ring[0],W(ia+5.85,ib,ic));put(e.ring[1],W(ia,ib-5.85,ic));put(e.ring[2],W(ia-5.85,ib,ic));put(e.ring[3],W(ia,ib+5.85,ic));
+  }
+  eye(G.EYE.R,31.5,1);eye(G.EYE.L,-31.5,-1);
+  /* MediaPipe 얼굴 변환 행렬(열 우선): 실제 모델 출력과 같은 규칙 */
+  var mat=[ex[0],ex[1],ex[2],0, ey[0],ey[1],ey[2],0, -ez[0],-ez[1],-ez[2],0, 0,0,-50,1];
+  return G.measure(lm,{vw:VW,vh:VH,matrix:mat});
+}
+function calibrate3d(){
+  var samples=[];
+  for(var z=1;z<=9;z++){var c=G.zoneCenter(z);for(var i=0;i<4;i++)samples.push({f:G.featureVec(face3d({tx:c.x,ty:c.y})),x:c.x,y:c.y});}
+  return G.ridgeFit(samples,null,SCREEN.w/SCREEN.h);
+}
+function worst(model,pose){
+  var e=0,hit=0;
+  for(var z=1;z<=9;z++){
+    var c=G.zoneCenter(z),a={tx:c.x,ty:c.y};for(var k in pose)a[k]=pose[k];
+    var p=G.predict(model,G.featureVec(face3d(a)));
+    e=Math.max(e,Math.abs(p.x-c.x),Math.abs(p.y-c.y));
+    if(G.zoneOf(p.x,p.y)===z)hit++;
+  }
+  return {err:e,hit:hit};
+}
+var M3=null;
+test("모의 얼굴: 머리 각도를 실제 모델과 같은 부호로 읽는다",function(){
+  var m=face3d({tx:0.5,ty:0.5,yaw:20});near(m.yaw,20,0.5,"오른쪽으로 돌림");
+  m=face3d({tx:0.5,ty:0.5,pitch:10});near(m.pitch,10,0.5,"아래로 숙임");
+  m=face3d({tx:0.5,ty:0.5,roll:15});near(m.roll,15,1.5,"기울임");
+  /* 같은 곳을 보면서 머리를 오른쪽으로 돌리면 홍채는 왼쪽으로 갑니다(실제 사진에서 확인한 방향) */
+  assert.ok(face3d({tx:0.5,ty:0.5,yaw:15}).hx<face3d({tx:0.5,ty:0.5}).hx-0.05);
+});
+test("머리를 바로 두고 보정하면 9칸을 맞힌다",function(){
+  M3=calibrate3d();
+  assert.ok(M3,"모델");
+  var r=worst(M3,{});
+  assert.strictEqual(r.hit,9);assert.ok(r.err<0.08,"오차 "+r.err);
+});
+test("머리가 기울어도(roll) 9칸을 맞힌다",function(){
+  [-25,-12,12,25].forEach(function(roll){
+    var r=worst(M3,{roll:roll});
+    assert.strictEqual(r.hit,9,"기울임 "+roll+"° 맞힌 칸 "+r.hit+", 오차 "+r.err.toFixed(3));
+  });
+});
+test("머리를 좌우, 상하로 돌려도 보정하면 9칸을 맞히고, 보정을 끄면 틀린다",function(){
+  var poses=[{yaw:12},{yaw:-12},{pitch:8},{pitch:-8},{yaw:10,pitch:6},{yaw:-8,pitch:-6,roll:15}];
+  var off=JSON.parse(JSON.stringify(M3));off.head=false;
+  var worse=0;
+  poses.forEach(function(p){
+    var on=worst(M3,p),no=worst(off,p);
+    assert.strictEqual(on.hit,9,JSON.stringify(p)+" 맞힌 칸 "+on.hit+", 오차 "+on.err.toFixed(3));
+    assert.ok(on.err<no.err,JSON.stringify(p)+" 보정 "+on.err.toFixed(3)+" / 끔 "+no.err.toFixed(3));
+    if(no.hit<9)worse++;
+  });
+  assert.ok(worse>=4,"보정을 끄면 틀리는 자세가 여럿 있어야 시험이 의미가 있습니다: "+worse);
+});
+test("머리 각도 보정은 너무 큰 각도에서 폭주하지 않는다",function(){
+  var f=G.featureVec(face3d({tx:0.5,ty:0.5})),g=f.slice();g[3]+=170;
+  var a=G.headShift(M3,f),b=G.headShift(M3,g);
+  near(a.x,0,0.05);assert.ok(Math.abs(b.x)<3,"30도에서 묶임: "+b.x);
+  var bad=JSON.parse(JSON.stringify(M3));bad.wx[0]=-1;
+  assert.deepStrictEqual(G.headShift(bad,g),{x:0,y:0},"좌우 방향을 못 배운 모델에서는 쓰지 않음");
+});
+
 console.log("부드럽게 하기와 칸 판정");
 test("One-Euro 필터가 떨림을 줄이고 이동은 따라간다",function(){
   var f=new G.OneEuro(0.6,0.5),r=rng(11),t=0,i,inV=0,outV=0;

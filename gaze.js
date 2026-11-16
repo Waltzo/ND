@@ -413,11 +413,11 @@
     model=null;base=null;wantFull=true;
     try{
       var d=JSON.parse(localStorage.getItem(KEY));
-      if(d&&d.v===1&&d.model&&d.model.wx&&d.base){model=d.model;base=d.base;wantFull=false;}
+      if(d&&d.v===2&&d.model&&d.model.wx&&d.base){model=d.model;base=d.base;wantFull=false;}
     }catch(err){}
   }
   function saveCal(){
-    try{localStorage.setItem(KEY,JSON.stringify({v:1,model:model,base:base}));}catch(err){}
+    try{localStorage.setItem(KEY,JSON.stringify({v:2,model:model,base:base}));}catch(err){}
   }
   /* 한 점에서 너무 오래 걸리면 환자가 그 화면에 갇히지 않게 자세 점검부터 다시 합니다. */
   function pointStuck(now){
@@ -470,7 +470,7 @@
     return range(hx)>=0.02&&range(hy)>=0.01;
   }
   function finishCalib(){
-    var fit=eyesMoved()?C.ridgeFit(calSamples):null;
+    var fit=eyesMoved()?C.ridgeFit(calSamples,null,stage.clientWidth/Math.max(1,stage.clientHeight)):null;
     if(!fit){
       if(++tries>=3){fail("보정을 마치지 못했습니다.");return;}
       mode="result";screen("result");

@@ -54,7 +54,9 @@
     };
   }
 
-  /* 얼굴 변환 행렬(4x4)에서 머리 각도(도). 행렬이 없으면 null */
+  /* 얼굴 변환 행렬(4x4)에서 머리 각도(도). 행렬이 없으면 null
+     yaw: 얼굴이 (뒤집은 화면의) 오른쪽으로 돌면 +, pitch: 얼굴이 아래로 숙여지면 +
+     부호는 고개를 돌린 실제 얼굴 사진을 모델에 넣어 코 위치, 깊이값과 맞는지 확인했습니다. */
   function anglesOf(d){
     if(!d||d.length<16)return null;
     var c0,c2;
@@ -90,15 +92,21 @@
       /* 행렬이 없을 때의 거친 추정: 눈을 잇는 선과 코끝 위치 */
       var ex=(R.c.x-L.c.x)/iod,ey=(R.c.y-L.c.y)/iod,n=px(lm,NOSE,vw,vh);
       var along=((n.x-mid.x)*ex+(n.y-mid.y)*ey)/iod,down=((n.x-mid.x)*-ey+(n.y-mid.y)*ex)/iod;
-      ang={yaw:clamp(along*90,-60,60),pitch:clamp((0.55-down)*90,-60,60),roll:Math.atan2(ey,ex)*180/Math.PI};
+      ang={yaw:clamp(along*90,-60,60),pitch:clamp((down-0.55)*90,-60,60)};
     }
+    /* 기울임: 두 눈을 잇는 선의 각도(뒤집은 화면에서 시계 방향이 +). 랜드마크에서 바로 구합니다.
+       홍채 위치는 눈꼬리 축(머리와 같이 기우는 축) 기준이므로, 이 각도만큼 돌려 화면 축 기준으로 바꿉니다.
+       이렇게 해야 머리가 기울어도 "화면에서 오른쪽, 아래"가 같은 뜻을 가집니다. */
+    var rho=Math.atan2(R.c.y-L.c.y,R.c.x-L.c.x),cr=Math.cos(rho),sr=Math.sin(rho);
+    var hx=avg("hx"),hy=avg("hy"),ly=avg("ly");
     var closed=null;
     if(o.blink)closed=both?Math.min(o.blink.l,o.blink.r):(use[0]===L?o.blink.l:o.blink.r);
     return {
       eyes:both?2:1,
-      hx:avg("hx"),hy:avg("hy"),ly:avg("ly"),open:avg("open"),
+      hx:hx,hy:hy,ly:ly,open:avg("open"),
+      gx:hx*cr-hy*sr,gy:hx*sr+hy*cr,gl:hx*sr+ly*cr,      /* 화면 축 기준 홍채 위치(좌우, 상하), 눈꺼풀 높이 */
       irisPx:irisPx,distCm:irisPx>0?f*IRIS_MM/irisPx/10:0,
-      yaw:ang.yaw,pitch:ang.pitch,roll:ang.roll,
+      yaw:ang.yaw,pitch:ang.pitch,roll:rho*180/Math.PI,
       ex:mid.x/vw,ey:mid.y/vh,
       box:{x0:x0,y0:y0,x1:x1,y1:y1},
       cut:x0<0.01||y0<0.01||x1>0.99||y1>0.99,
@@ -118,11 +126,26 @@
   /* ---------- 보정: 특징값 -> 화면 좌표 릿지 회귀 ---------- */
 
   /* 눈동자 방향 3개 + 머리 각도 3개 + 얼굴 위치 2개 */
-  function featureVec(m){return [m.hx,m.hy,m.ly,m.yaw,m.pitch,m.roll,m.ex,m.ey]}
+  function featureVec(m){return [m.gx,m.gy,m.gl,m.yaw,m.pitch,m.roll,m.ex,m.ey]}
   /* 보정하는 동안 거의 변하지 않는 값이 부풀려지지 않게 하는 최소 폭 */
   var SD_FLOOR=[0.01,0.01,0.01,4,4,4,0.04,0.04];
   /* 머리 쪽 값은 보정 중에 조금밖에 안 움직여 우연히 맞춰지기 쉬우므로 더 세게 누릅니다. */
-  var PENALTY=[1,1,1,20,20,20,20,20];
+  var PENALTY=[1,1,1,1000,1000,20,20,20];   /* 좌우, 상하 돌림은 회귀에 맡기지 않고 아래 headShift 로 보정합니다 */
+
+  /* 머리 돌림 보정. 같은 곳을 보면서 머리만 돌리면 눈은 머리 안에서 반대로 돕니다.
+     홍채 위치(눈 너비 기준)는 눈이 1라디안 돌 때 HEAD_K 만큼 움직입니다. 실제 얼굴 사진으로 재 보면
+     완만한 각도에서 0.32~0.39 였습니다. 보정 때 배운 "홍채 위치당 화면 이동"에 이 값을 곱하면
+     머리가 1도 돌 때 시선이 화면에서 얼마나 움직이는지 나옵니다. 상하는 화면의 가로세로 비로 환산합니다. */
+  var HEAD_K=0.35,HEAD_MAX=30;
+  function headShift(model,f){
+    var g=model.wx[0]/model.sd[0];                     /* 홍채 좌우 위치 1당 화면 좌우 이동 */
+    if(model.head===false||!(g>0))return {x:0,y:0};
+    var k=g*HEAD_K*Math.PI/180;
+    return {
+      x:k*clamp(f[3]-model.mean[3],-HEAD_MAX,HEAD_MAX),
+      y:k*(model.aspect||1.5)*clamp(f[4]-model.mean[4],-HEAD_MAX,HEAD_MAX)
+    };
+  }
 
   function solve(A,b){
     var n=b.length,i,j,k,M=A.map(function(r,i){return r.concat([b[i]])});
@@ -139,7 +162,8 @@
   }
 
   /* samples: [{f:[특징값], x, y}] (x, y는 0~1 화면 좌표). 맞출 수 없으면 null */
-  function ridgeFit(samples,lambda){
+  /* aspect: 자판 영역의 가로/세로 비(머리 상하 돌림을 화면 세로 이동으로 환산할 때 씁니다) */
+  function ridgeFit(samples,lambda,aspect){
     var n=samples.length,d=SD_FLOOR.length,i,j,k;
     if(n<d+2)return null;
     lambda=lambda==null?0.02:lambda;
@@ -164,7 +188,7 @@
     }
     var wx=solve(A,rx),wy=solve(A,ry);
     if(!wx||!wy)return null;
-    var model={mean:mean,sd:sd,wx:wx,wy:wy,bx:bx,by:by,off:{x:0,y:0},c0:0,rms:0};
+    var model={mean:mean,sd:sd,wx:wx,wy:wy,bx:bx,by:by,off:{x:0,y:0},c0:0,rms:0,aspect:aspect||1.5};
     var e=0;
     for(i=0;i<n;i++){var p=predict(model,samples[i].f);e+=Math.pow(p.x-samples[i].x,2)+Math.pow(p.y-samples[i].y,2);}
     model.rms=Math.sqrt(e/n);
@@ -173,7 +197,8 @@
   function predict(model,f){
     var x=model.bx+model.off.x,y=model.by+model.off.y,j,z;
     for(j=0;j<f.length;j++){z=(f[j]-model.mean[j])/model.sd[j];x+=model.wx[j]*z;y+=model.wy[j]*z;}
-    return {x:x,y:y};
+    var h=headShift(model,f);
+    return {x:x+h.x,y:y+h.y};
   }
   /* 빠른 재보정: 가운데를 볼 때의 특징값들로 치우침만 고칩니다. 너무 크게 어긋났으면 false */
   function biasFix(model,feats){
@@ -466,7 +491,7 @@
   function MoveDetector(base,o){
     o=o||{};
     this.base=base;this.ms=o.ms||1200;this.since=null;
-    this.pos=o.pos||0.12;this.dist=o.dist||0.25;this.angle=o.angle||15;
+    this.pos=o.pos||0.12;this.dist=o.dist||0.25;this.angle=o.angle||25;   /* 머리 각도는 보정하므로 넉넉하게 */
   }
   MoveDetector.prototype.update=function(m,t){
     if(!m||!this.base)return false;
@@ -483,7 +508,7 @@
     EYE:EYE,IRIS_MM:IRIS_MM,LIMIT:LIMIT,
     clamp:clamp,median:median,majority:majority,
     measure:measure,anglesOf:anglesOf,EarCloser:EarCloser,
-    featureVec:featureVec,ridgeFit:ridgeFit,predict:predict,biasFix:biasFix,
+    featureVec:featureVec,headShift:headShift,HEAD_K:HEAD_K,ridgeFit:ridgeFit,predict:predict,biasFix:biasFix,
     OneEuro:OneEuro,zoneOf:zoneOf,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
     BlinkDetector:BlinkDetector,Tracker:Tracker,
     Collector:Collector,HoldGate:HoldGate,
