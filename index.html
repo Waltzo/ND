@@ -128,6 +128,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
 .words{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.field>select{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 8px;font-size:13px}
 .words input,.field>input[type=text]{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;font-size:13px}
 .row{display:flex;gap:8px}
 .btn{flex:1;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px}
@@ -211,6 +212,26 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <button class="btn" id="soundBtn" type="button" aria-pressed="false">소리 켜기</button>
     <button class="btn" id="clearBtn" type="button">모두 지우기</button>
   </div>
+
+  <h2>목소리</h2>
+  <div class="field">
+    <label class="field__top" for="voice"><span>목소리</span></label>
+    <select id="voice"><option value="">기기 기본 목소리</option></select>
+    <p id="voiceNote">이 기기에 들어 있는 한국어 목소리 가운데 고릅니다.</p>
+  </div>
+  <div class="field">
+    <label class="field__top" for="vRate"><span>말 빠르기</span><output id="vRateOut">보통</output></label>
+    <input type="range" id="vRate" min="0.5" max="1.5" step="0.05" value="0.95">
+  </div>
+  <div class="field">
+    <label class="field__top" for="vPitch"><span>목소리 높이</span><output id="vPitchOut">보통</output></label>
+    <input type="range" id="vPitch" min="0.5" max="1.5" step="0.05" value="1">
+  </div>
+  <div class="field">
+    <label class="field__top" for="vVol"><span>말소리 크기</span><output id="vVolOut">100%</output></label>
+    <input type="range" id="vVol" min="0.1" max="1" step="0.05" value="1">
+  </div>
+  <div class="row"><button class="btn" id="voiceTest" type="button">들어 보기</button></div>
 
   <h2>고르는 방식</h2>
   <div class="field">
@@ -621,10 +642,58 @@ function compose(list){
       o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+0.3);
     }}catch(err){}
   }
-  function speak(t,onend){
-    if(!S.sound)return;
-    try{var u=new SpeechSynthesisUtterance(t);u.lang="ko-KR";u.rate=0.95;if(onend)u.onend=onend;speechSynthesis.cancel();speechSynthesis.speak(u);}catch(err){}
+  /* 목소리 설정(목소리, 빠르기, 높이, 크기). 이 기기에 저장합니다. */
+  var V={voice:"",rate:0.95,pitch:1,vol:1};
+  try{
+    var savedV=JSON.parse(localStorage.getItem("nundam-voice"));
+    if(savedV)for(var vk in V)if(typeof savedV[vk]===typeof V[vk])V[vk]=savedV[vk];
+  }catch(err){}
+  function saveVoice(){try{localStorage.setItem("nundam-voice",JSON.stringify(V));}catch(err){}}
+  function voices(){try{return speechSynthesis.getVoices()||[];}catch(err){return [];}}
+  function pickedVoice(){
+    if(!V.voice)return null;
+    var all=voices();
+    for(var i=0;i<all.length;i++)if(all[i].voiceURI===V.voice)return all[i];
+    return null;
   }
+  /* force: 소리가 꺼져 있어도 말합니다(설정의 들어 보기) */
+  function speak(t,onend,force){
+    if(!S.sound&&!force)return;
+    try{
+      var u=new SpeechSynthesisUtterance(t),v=pickedVoice();
+      u.lang=v?v.lang:"ko-KR";if(v)u.voice=v;
+      u.rate=V.rate;u.pitch=V.pitch;u.volume=V.vol;
+      if(onend)u.onend=onend;
+      speechSynthesis.cancel();speechSynthesis.speak(u);
+    }catch(err){}
+  }
+  /* 목소리 목록은 기기가 늦게 알려 주기도 해서, 바뀔 때마다 다시 채웁니다. 한국어 목소리만 보여 줍니다. */
+  function fillVoices(){
+    var sel=$("voice"),ko=voices().filter(function(v){return /^ko/i.test(v.lang)});
+    sel.innerHTML='<option value="">기기 기본 목소리</option>';
+    ko.forEach(function(v){
+      var o=document.createElement("option");
+      o.value=v.voiceURI;o.textContent=v.name+(v.localService===false?" (인터넷 필요)":"");
+      sel.appendChild(o);
+    });
+    sel.value=pickedVoice()?V.voice:"";
+    $("voiceNote").textContent=ko.length?"이 기기에 들어 있는 한국어 목소리 "+ko.length+"개 가운데 고릅니다.":
+      "이 기기에서 고를 수 있는 한국어 목소리를 찾지 못했습니다. 기기 설정에서 한국어 음성을 내려받으면 여기에 나옵니다.";
+  }
+  fillVoices();
+  try{speechSynthesis.addEventListener("voiceschanged",fillVoices);}catch(err){}
+  $("voice").addEventListener("change",function(){V.voice=this.value;saveVoice();});
+  function vslider(id,key,fmt){
+    var el=$(id),out=$(id+"Out");
+    function show(){out.textContent=fmt(V[key]);}
+    el.value=V[key];show();
+    el.addEventListener("input",function(){V[key]=parseFloat(el.value);show();saveVoice();});
+  }
+  function near1(v,slow,fast){return v<0.9?slow:(v>1.1?fast:"보통")}
+  vslider("vRate","rate",function(v){return near1(v,"느리게","빠르게")+" "+v.toFixed(2)});
+  vslider("vPitch","pitch",function(v){return near1(v,"낮게","높게")+" "+v.toFixed(2)});
+  vslider("vVol","vol",function(v){return Math.round(v*100)+"%"});
+  $("voiceTest").addEventListener("click",function(){speak("안녕하세요. 이 목소리로 말합니다.",null,true);});
   $("soundBtn").addEventListener("click",function(){
     S.sound=!S.sound;this.setAttribute("aria-pressed",S.sound);this.textContent=S.sound?"소리 끄기":"소리 켜기";
     if(S.sound){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(err){}
