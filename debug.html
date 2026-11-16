@@ -31,6 +31,7 @@ main{padding:12px 16px;display:grid;gap:12px;grid-template-columns:minmax(0,1.2f
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
 .card h2{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.06em;margin:0 0 8px}
 #view{display:block;width:100%;height:auto;border-radius:10px;background:var(--bg)}
+#faceCv{display:block;width:min(100%,420px);height:auto;border-radius:10px;background:var(--bg)}
 .ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
 .ctl label{display:flex;gap:6px;align-items:center;font-size:14px}
 .ctl select,.ctl input[type=range]{accent-color:var(--accent)}
@@ -62,6 +63,9 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     <p id="msg" role="status">카메라를 준비하고 있습니다</p>
     <canvas id="view" width="960" height="540" aria-label="카메라 영상과 얼굴 테두리"></canvas>
     <p class="note">파란 네모는 찾은 얼굴, 주황 네모는 얼굴을 잘라 넣을 때 쓰는 범위입니다.</p>
+    <h2 style="margin-top:14px">모델이 읽는 그림 (얼굴을 가운데 두고 얼굴 너비 500px 로 확대)</h2>
+    <canvas id="faceCv" width="600" height="600" aria-label="얼굴을 가운데 두고 확대한 그림"></canvas>
+    <p class="note" id="faceNote">얼굴을 찾으면 여기에 보입니다.</p>
   </section>
 
   <section class="card">
@@ -246,6 +250,35 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     var want=C.cropAround(m.box,vw,vh);
     if(!crop||C.cropStale(crop,want)){crop=want;flush=true;}
   }
+  /* 모델에 실제로 넣은 그림(얼굴을 가운데 두고 키운 것)을 거울처럼 뒤집어 보여 줍니다. */
+  function drawFace(m){
+    var cv=$("faceCv"),g=cv.getContext("2d"),note=$("faceNote");
+    if(!(m&&usedCrop&&crop)){
+      g.fillStyle=cssVar("--bg");g.fillRect(0,0,cv.width,cv.height);
+      note.textContent=opt.crop?"얼굴을 찾으면 여기에 보입니다.":"얼굴을 잘라 확대해서 읽기가 꺼져 있습니다.";
+      return;
+    }
+    var vw=video.videoWidth,c=crop,W=cv.width,k=W/c.w;
+    if(cv.height!==W)cv.height=W;
+    g.fillStyle="#808080";g.fillRect(0,0,W,W);
+    var sx0=Math.max(0,c.x),sy0=Math.max(0,c.y),sx1=Math.min(vw,c.x+c.w),sy1=Math.min(video.videoHeight,c.y+c.h);
+    g.imageSmoothingEnabled=!opt.pixel;
+    if(sx1>sx0&&sy1>sy0){
+      g.save();g.translate(W,0);g.scale(-1,1);
+      g.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-c.x)*k,(sy0-c.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
+      g.restore();
+    }
+    var ox=vw-c.x-c.w;
+    function X(x){return (x-ox)*k}
+    function Y(y){return (y-c.y)*k}
+    g.lineWidth=2;g.strokeStyle=cssVar("--accent");
+    [m.R,m.L].forEach(function(e){
+      g.beginPath();g.moveTo(X(e.a.x),Y(e.a.y));g.lineTo(X(e.up.x),Y(e.up.y));g.lineTo(X(e.b.x),Y(e.b.y));g.lineTo(X(e.low.x),Y(e.low.y));g.closePath();g.stroke();
+    });
+    g.strokeStyle=cssVar("--signal");
+    [m.R,m.L].forEach(function(e){g.beginPath();g.arc(X(e.iris.x),Y(e.iris.y),Math.max(2,e.irisPx*k/2),0,Math.PI*2);g.stroke();});
+    note.textContent="원본 얼굴 너비 "+Math.round(c.fw)+"px 를 "+Math.round(c.fw*c.scale)+"px 로 ("+c.scale.toFixed(1)+"배) 키워 모델에 넣습니다. 모델 입력 "+cropCv.width+" x "+cropCv.height;
+  }
   function drawView(m){
     var vw=video.videoWidth,vh=video.videoHeight,w=view.width,h=Math.round(w*vh/vw),g=view.getContext("2d");
     if(view.height!==h)view.height=h;
@@ -309,7 +342,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     var took=performance.now()-now;inferMs=inferMs?inferMs*0.9+took*0.1:took;fps.update(now);
     lastM=m;
     say(m?"":(searching?"얼굴을 찾고 있습니다":"얼굴이 보이지 않습니다. 카메라가 얼굴을 보게 해 주세요"));
-    drawView(m);drawEyes(m);showInfo(m);
+    drawView(m);drawFace(m);drawEyes(m);showInfo(m);
     if(opt.crop)nextCrop(m);
   }
   function fitEyes(){document.body.style.setProperty("--eyes-h",$("eyes").offsetHeight+"px")}
