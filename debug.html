@@ -201,32 +201,50 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     return {l:cat[blinkIdx.l].score,r:cat[blinkIdx.r].score};
   }
   /* 얼굴 둘레만 잘라 키운 그림을 모델에 넣고, 나온 좌표를 원본 영상 기준으로 되돌립니다. */
+  /* 자판(gaze.js)과 같은 방법으로 읽습니다.
+     따라가는 얼굴이 있으면 한가운데 두고 얼굴 너비 500px 로 키워 넣고,
+     없으면 화면 전체, 그다음 화면을 겹치는 조각으로 나눠 차례로 넣어 먼 얼굴을 찾습니다. */
+  var regions=null,regionIdx=0,flush=false,searching=false;
   function detect(now){
-    var vw=video.videoWidth,vh=video.videoHeight,src=video,c=null;
-    if(opt.crop&&crop){
+    var vw=video.videoWidth,vh=video.videoHeight,src=video,c=null,g2=cropCv.getContext("2d");
+    if(flush){
+      /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
+      flush=false;cropCv.width=64;cropCv.height=64;g2.fillStyle="#808080";g2.fillRect(0,0,64,64);
+      landmarker.detectForVideo(cropCv,now);
+      return lastM;
+    }
+    if(opt.crop){
       c=crop;
-      /* 자판과 같은 방법: 얼굴을 한가운데 두고 얼굴 너비가 500px 이 되게 키웁니다. 영상 밖은 회색으로 둡니다. */
-      var k=c.scale,g2=cropCv.getContext("2d");
+      if(!c){
+        if(!regions||regions.vw!==vw||regions.vh!==vh){regions=C.searchRegions(vw,vh);regions.vw=vw;regions.vh=vh;regionIdx=0;}
+        c=regions[regionIdx];regionIdx=(regionIdx+1)%regions.length;
+      }
+    }
+    usedCrop=!!(c&&c===crop);searching=opt.crop&&!crop;
+    if(c){
+      var k=c.scale||Math.min(4,Math.max(1,640/c.w));
       cropCv.width=Math.round(c.w*k);cropCv.height=Math.round(c.h*k);
       var sx0=Math.max(0,c.x),sy0=Math.max(0,c.y),sx1=Math.min(vw,c.x+c.w),sy1=Math.min(vh,c.y+c.h);
-      g2.fillStyle="#808080";g2.fillRect(0,0,cropCv.width,cropCv.height);
+      g2.fillStyle="#808080";g2.fillRect(0,0,cropCv.width,cropCv.height);   /* 영상 밖은 회색 */
       if(sx1>sx0&&sy1>sy0)g2.drawImage(video,sx0,sy0,sx1-sx0,sy1-sy0,(sx0-c.x)*k,(sy0-c.y)*k,(sx1-sx0)*k,(sy1-sy0)*k);
       src=cropCv;
     }
-    usedCrop=!!c;
-    var res=landmarker.detectForVideo(src,now),lm=res.faceLandmarks&&res.faceLandmarks[0];
-    if(!lm)return null;
-    if(c)lm=lm.map(function(p){return {x:(c.x+p.x*c.w)/vw,y:(c.y+p.y*c.h)/vh,z:p.z}});
-    var mx=res.facialTransformationMatrixes&&res.facialTransformationMatrixes[0];
-    return C.measure(lm,{vw:vw,vh:vh,matrix:mx?mx.data:null,blink:readBlink(res),hfov:+$("hfov").value});
+    var res=landmarker.detectForVideo(src,now),lm=res.faceLandmarks&&res.faceLandmarks[0],m=null;
+    if(lm){
+      if(c)lm=lm.map(function(p){return {x:(c.x+p.x*c.w)/vw,y:(c.y+p.y*c.h)/vh,z:p.z}});
+      var mx=res.facialTransformationMatrixes&&res.facialTransformationMatrixes[0];
+      m=C.measure(lm,{vw:vw,vh:vh,matrix:mx?mx.data:null,blink:readBlink(res),hfov:+$("hfov").value});
+      if(m&&!C.plausible(m,c,vw))m=null;
+    }
+    return m;
   }
-  /* 다음 프레임에 잘라 넣을 범위: 찾은 얼굴보다 넉넉하게. 얼굴을 놓치면 화면 전체로 돌아갑니다. */
+  /* 다음 프레임에 넣을 범위. 얼굴을 놓치면 처음부터 다시 찾습니다. */
   function nextCrop(m){
     var vw=video.videoWidth,vh=video.videoHeight;
-    if(!m){if(++miss>5)crop=null;return;}
+    if(!m){if(crop&&++miss>5){crop=null;regionIdx=0;flush=true;}return;}
     miss=0;
     var want=C.cropAround(m.box,vw,vh);
-    if(!crop||C.cropStale(crop,want))crop=want;
+    if(!crop||C.cropStale(crop,want)){crop=want;flush=true;}
   }
   function drawView(m){
     var vw=video.videoWidth,vh=video.videoHeight,w=view.width,h=Math.round(w*vh/vw),g=view.getContext("2d");
@@ -270,7 +288,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     t.push("영상 "+video.videoWidth+" x "+video.videoHeight+" · 초당 "+r(fps.fps)+"회 (계산 "+r(inferMs)+"ms)");
     t.push("카메라 최대 "+(caps.width?caps.width.max:"?")+" x "+(caps.height?caps.height.max:"?")+" · 초당 "+(caps.frameRate?r(caps.frameRate.max):"?")+"장");
     t.push("줌 "+(z&&typeof z.max==="number"?z.min+" ~ "+z.max+"배 (지금 "+(set.zoom||"?")+"배)":"지원 안 함"));
-    t.push("읽는 방법 "+(usedCrop?"얼굴을 가운데 두고 확대 (얼굴 "+r(crop.fw)+"px 를 "+r(crop.fw*crop.scale)+"px 로, "+crop.scale.toFixed(1)+"배)":"화면 전체"));
+    t.push("읽는 방법 "+(usedCrop?"얼굴을 가운데 두고 확대 (얼굴 "+r(crop.fw)+"px 를 "+r(crop.fw*crop.scale)+"px 로, "+crop.scale.toFixed(1)+"배)":(searching?"얼굴을 찾는 중 (화면을 조각으로 나눠 봄)":"화면 전체")));
     if(!m){t.push("얼굴이 보이지 않습니다");}
     else{
       var q=C.quality({irisPx:m.irisPx,fps:0,light:null});   /* 홍채 크기만 봅니다 */
@@ -290,7 +308,7 @@ video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:
     try{m=detect(now);}catch(err){say("얼굴 인식이 멈췄습니다.");return;}
     var took=performance.now()-now;inferMs=inferMs?inferMs*0.9+took*0.1:took;fps.update(now);
     lastM=m;
-    say(m?"":"얼굴이 보이지 않습니다. 카메라가 얼굴을 보게 해 주세요");
+    say(m?"":(searching?"얼굴을 찾고 있습니다":"얼굴이 보이지 않습니다. 카메라가 얼굴을 보게 해 주세요"));
     drawView(m);drawEyes(m);showInfo(m);
     if(opt.crop)nextCrop(m);
   }
