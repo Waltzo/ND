@@ -450,7 +450,7 @@
   /* 찾은 얼굴(뒤집은 0~1 좌표의 box)이 한가운데 오는 정사각형 범위(원본 영상 픽셀).
      얼굴이 영상 가장자리에 있으면 범위가 영상 밖으로 나갑니다(그 부분은 빈 채로 둡니다).
      fw 는 얼굴 너비(픽셀), scale 은 얼굴 너비가 FACE_PX 가 되게 하는 확대 배율입니다. */
-  var FACE_PX=500,CROP_MARGIN=1.5,CROP_MAX=1280;
+  var FACE_PX=400,CROP_MARGIN=1.5,CROP_MAX=1024;
   function cropAround(box,vw,vh){
     var x0=(1-box.x1)*vw,x1=(1-box.x0)*vw,y0=box.y0*vh,y1=box.y1*vh;
     var fw=Math.max(1,x1-x0),side=Math.max(fw,y1-y0)*CROP_MARGIN;

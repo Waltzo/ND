@@ -279,7 +279,7 @@
       region=regions[regionIdx];regionIdx=(regionIdx+1)%regions.length;
     }
     if(!region)return video;
-    /* 따라가는 얼굴은 한가운데에 두고 얼굴 너비가 500px 이 되게 키웁니다. 찾는 중인 조각은 폭 640쯤으로. */
+    /* 따라가는 얼굴은 한가운데에 두고 얼굴 너비가 400px 이 되게 키웁니다. 찾는 중인 조각은 폭 640쯤으로. */
     var r=region,k=r.scale||Math.min(4,Math.max(1,640/r.w));
     var w=Math.round(r.w*k),h=Math.round(r.h*k),g=cropCv.getContext("2d");
     if(cropCv.width!==w)cropCv.width=w;

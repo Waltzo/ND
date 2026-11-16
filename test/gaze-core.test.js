@@ -492,10 +492,11 @@ test("먼 얼굴 찾기: 화면을 조각으로 나눠 차례로 본다",functio
 test("얼굴 둘레 범위를 잡고, 꽤 벗어났을 때만 새로 잡는다",function(){
   var box={x0:0.45,x1:0.55,y0:0.4,y1:0.6},c=G.cropAround(box,1920,1080);
   near(c.w,216*1.5,0.5);near(c.x+c.w/2,960,0.5);near(c.y+c.h/2,540,0.5);
-  near(c.fw,192,0.5);near(c.fw*c.scale,500,0.5,"얼굴 너비가 500px 이 되게 확대");
-  /* 아주 작은 얼굴도 500px 까지, 아주 큰 얼굴은 줄여서 500px */
-  var tiny=G.cropAround({x0:0.49,x1:0.51,y0:0.47,y1:0.52},1920,1080);near(tiny.fw*tiny.scale,500,0.5);
-  var huge=G.cropAround({x0:0.2,x1:0.8,y0:0.1,y1:0.9},1920,1080);near(huge.fw*huge.scale,500,0.5);assert.ok(huge.scale<1);
+  near(c.fw,192,0.5);near(c.fw*c.scale,G.FACE_PX,0.5,"얼굴 너비가 400px 이 되게 확대");
+  assert.strictEqual(G.FACE_PX,400);
+  /* 아주 작은 얼굴도 400px 까지, 아주 큰 얼굴은 줄여서 400px */
+  var tiny=G.cropAround({x0:0.49,x1:0.51,y0:0.47,y1:0.52},1920,1080);near(tiny.fw*tiny.scale,400,0.5);
+  var huge=G.cropAround({x0:0.2,x1:0.8,y0:0.1,y1:0.9},1920,1080);near(huge.fw*huge.scale,400,0.5);assert.ok(huge.scale<1);
   /* 뒤집은 좌표의 오른쪽(x 0.9)은 원본 영상의 왼쪽 */
   var left=G.cropAround({x0:0.85,x1:0.95,y0:0.4,y1:0.6},1920,1080);
   assert.ok(left.x<300,"원본 왼쪽: "+left.x);assert.ok(left.x>=0);
