@@ -275,8 +275,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-v="direct" aria-pressed="true">9칸 직접</button>
       <button type="button" data-v="joy" aria-pressed="false">조이스틱</button>
     </div>
-    <p data-nav="joy">화면을 대각선으로 넷으로 나눈 위, 아래, 왼쪽, 오른쪽 어디를 보든 그쪽 칸에 붙어 테두리가 주황색이 됩니다. 화면 가장자리나 모서리, 화면 밖을 봐도 그쪽으로 칩니다. 붙은 채로 확인하면 그쪽 칸이 가운데로 옵니다. 가운데를 보고 확인하면 가운데에 온 칸을 고릅니다. 글자나 숫자를 넣고 나면 다시 가운데에서 시작합니다.</p>
+    <p data-nav="joy">눈을 가운데에서 왼쪽(오른쪽, 위, 아래)으로 보냈다가 다시 가운데로 돌아오면 그쪽 칸이 가운데로 옵니다. 두 번 깜빡이면 가운데에 온 칸을 고르고 처음 자리로 돌아갑니다. 아무것도 하지 않으면 칸 테두리가 줄어들다가 처음 자리로 돌아갑니다.</p>
     <p data-nav="direct">고를 칸을 직접 보고 확인합니다.</p>
+  </div>
+  <div class="field" data-nav="joy">
+    <label class="field__top" for="joyBack"><span>가운데로 돌아오는 시간</span><output id="joyBackOut">4.0초</output></label>
+    <input type="range" id="joyBack" min="2" max="10" step="0.5" value="4">
+    <p>칸을 옮긴 뒤 이 시간 동안 아무것도 하지 않으면 처음 자리로 돌아옵니다.</p>
   </div>
   <h2>확인 방식</h2>
   <div class="field">
@@ -451,7 +456,7 @@ function compose(list){
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
-  var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,input:"mouse",nav:"direct"};
+  var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,input:"mouse",nav:"direct",back:4};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, 7 8 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
@@ -464,6 +469,11 @@ function compose(list){
   var focus=5;              /* 조이스틱 방식에서 가운데에 와 있는 칸 */
   var jz=null,jc=null,jct=0; /* 조이스틱 방향이 경계에서 떨리지 않게 잠깐 머물러야 바뀝니다 */
   var DIR={2:1,8:1,4:1,6:1};   /* 조이스틱의 방향 자리(위, 아래, 왼쪽, 오른쪽) */
+  /* 조이스틱: 가운데 -> 방향 -> 가운데로 눈이 다녀오면 그쪽으로 한 칸 옮깁니다 */
+  var flickDir=null,flickAt=0;   /* 지금 다녀오는 중인 방향과 가운데를 떠난 때 */
+  var FLICK_MAX=2500;            /* 이보다 오래 딴 데를 보다 오면 옮기지 않습니다 */
+  var backAt=0;                  /* 이때까지 아무것도 안 하면 처음 자리로 돌아갑니다 */
+  var ringShown=null;            /* 지금 고리를 그리고 있는 칸 */
   var camZone=null,locked=false;   /* 카메라가 알려 준 칸, 자세 점검과 보정 중 입력 잠금 */
 
   function mainMap(){
@@ -624,13 +634,21 @@ function compose(list){
     for(var z=1;z<=9;z++)tiles[z].classList.toggle("is-focus",joy&&z===focus);
   }
   /* 보고 있는 자리를 확인했을 때: 조이스틱이면 가운데는 고르기, 방향은 옮기기 */
+  /* 보고 있는 자리를 확인했을 때. 조이스틱에서는 어디를 보고 있든 가운데에 온 칸을 고릅니다. */
   function confirm(z){
-    if(S.nav!=="joy"){act(z);return;}
-    if(z===5){act(focus);return;}
-    var t=neighbor(z);
-    if(t){focus=t;placeBoard();tick(880,0.06);}
-    else tick(330,0.08);          /* 그쪽에는 칸이 없음 */
-    armed=false;dwellT=0;
+    act(S.nav==="joy"?focus:z);
+  }
+  /* 조이스틱: 눈이 그 방향을 다녀왔을 때 한 칸 옮깁니다 */
+  function joyMove(dir,now){
+    var t=neighbor(dir);
+    if(!t){tick(330,0.08);return;}      /* 그쪽에는 칸이 없음 */
+    focus=t;firstBlink=0;placeBoard();tick(880,0.06);
+    backAt=now+S.back*1000;
+  }
+  function joyHome(){
+    flickDir=null;
+    if(focus===5)return;
+    focus=5;firstBlink=0;placeBoard();
   }
   function zoneAt(g){
     var col=Math.max(0,Math.min(2,Math.floor(g.x/(W/3)))),row=Math.max(0,Math.min(2,Math.floor(g.y/(H/3))));
@@ -659,7 +677,8 @@ function compose(list){
   dlg.addEventListener("click",function(e){var r=dlg.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeSet();});
   function blink(){
     if(S.pick!=="double"||!raw||dlg.open||locked)return;
-    var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw)),now=performance.now();
+    var joy=S.nav==="joy",z=joy?5:(zone||zoneAt(raw)),now=performance.now();
+    if(joy)backAt=Math.max(backAt,now+S.gap*1000+200);     /* 두 번째 깜빡임을 기다리는 동안 돌아가지 않게 */
     /* 첫 깜빡임이 읽힌 뒤에는, 그사이 눈이 다른 칸으로 가 있어도 처음 그 칸을 고릅니다. */
     if(firstBlink&&now-firstBlink<S.gap*1000){firstBlink=0;confirm(firstZone);}
     else{firstBlink=now;firstZone=z;firstEl=tiles[slot(z)]||null;tick(660,0.04);}
@@ -671,7 +690,7 @@ function compose(list){
   function longBlink(){
     if(!raw||dlg.open||locked)return;
     var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw));
-    if(S.nav==="joy"&&z!==5)return;          /* 조이스틱에서는 가운데에 온 칸만 */
+    if(S.nav==="joy"){z=5;backAt=Math.max(backAt,performance.now()+S.back*1000);}   /* 조이스틱에서는 가운데에 온 칸 */
     var sz=slot(z),d=sz?cur[sz]:null;
     if(!d||d.type!=="back")return;
     firstBlink=0;
@@ -816,7 +835,8 @@ function compose(list){
     }
     armed=false;dwellT=0;
     /* 글자나 숫자를 넣었거나 화면이 바뀌면 다시 가운데에서 시작합니다 */
-    if(view!==view0||d.type==="input"){focus=5;placeBoard();}
+    /* 조이스틱에서는 무엇을 골랐든 처음 자리로 돌아가고, 다녀오던 방향도 없던 일로 합니다 */
+    if(view!==view0||d.type==="input"||S.nav==="joy"){focus=5;flickDir=null;placeBoard();}
     render();tick(880,0.12);
     var t=tiles[z];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
@@ -833,7 +853,17 @@ function compose(list){
     var z=null;
     if(S.nav==="joy")z=joyHold(g?joyZone(g):null,now);
     else if(g)z=S.input==="camera"&&camZone?camZone:zoneAt(g);
-    if(z!==zone){zone=z;dwellT=0;armed=true;}
+    if(z!==zone){
+      if(S.nav==="joy"){
+        /* 가운데 -> 방향 -> 가운데. 방향에서 다른 방향으로 넘어가거나 시선을 잃으면 없던 일로 합니다. */
+        if(zone===5&&DIR[z]){flickDir=z;flickAt=now;}
+        else if(z===5&&flickDir&&zone===flickDir){if(now-flickAt<=FLICK_MAX)joyMove(flickDir,now);flickDir=null;}
+        else flickDir=null;
+      }
+      zone=z;dwellT=0;armed=true;
+    }
+    /* 조이스틱: 옮겨 놓고 아무것도 하지 않으면 처음 자리로 */
+    if(S.nav==="joy"&&focus!==5&&!firstBlink&&now>=backAt)joyHome();
     if(firstBlink&&now-firstBlink>=S.gap*1000)firstBlink=0;
     var fe=firstBlink&&dbl?firstEl:null;
     if(fe!==shownFirst){
@@ -844,8 +874,8 @@ function compose(list){
 
     if(g&&!dbl){
       var sz=slot(zone),d=sz?cur[sz]:null;
-      /* 조이스틱의 방향은 옮길 칸이 있으면, 그 밖에는 고를 수 있는 칸이면 응시 시간을 셉니다 */
-      var can=S.nav==="joy"&&zone!==5?!!sz:!!(d&&d.type!=="value");
+      /* 고를 수 있는 칸을 보고 있으면 응시 시간을 셉니다. 조이스틱에서는 가운데를 볼 때만 */
+      var can=!(S.nav==="joy"&&zone!==5)&&!!(d&&d.type!=="value");
       if(can&&armed){
         dwellT+=dt;
         if(dwellT>=S.dwell){confirm(zone);}
@@ -858,13 +888,15 @@ function compose(list){
       if(el)el.classList.add("is-look");
       lookEl=el;
     }
-    /* 고리: 두 번 깜빡임은 첫 깜빡임이 읽힌 칸에 남은 시간을, 응시는 보는 칸에 응시 시간을 그립니다. */
-    var ringEl=dbl?shownFirst:lookEl;
-    if(lookEl&&lookEl!==ringEl){var r2=lookEl.querySelector(".ring");if(r2)r2.style.setProperty("--p",0);}
-    if(ringEl){
-      var p=dbl?Math.max(0,1-(now-firstBlink)/(S.gap*1000)):Math.min(1,dwellT/S.dwell);
-      var r1=ringEl.querySelector(".ring");if(r1)r1.style.setProperty("--p",p);
+    /* 고리: 두 번 깜빡임은 첫 깜빡임이 읽힌 칸에 남은 시간을, 응시는 보는 칸에 응시 시간을 그립니다.
+       조이스틱은 옮겨 온 칸에, 처음 자리로 돌아가기까지 남은 시간을 줄어드는 테두리로 그립니다. */
+    var ringEl=dbl?shownFirst:lookEl,p=dbl?Math.max(0,1-(now-firstBlink)/(S.gap*1000)):Math.min(1,dwellT/S.dwell);
+    if(S.nav==="joy"&&focus!==5&&!(dbl&&firstBlink)&&!(!dbl&&zone===5&&dwellT>0)){
+      ringEl=tiles[focus];p=Math.max(0,Math.min(1,(backAt-now)/(S.back*1000)));
     }
+    if(ringShown&&ringShown!==ringEl){var r2=ringShown.querySelector(".ring");if(r2)r2.style.setProperty("--p",0);}
+    ringShown=ringEl;
+    if(ringEl){var r1=ringEl.querySelector(".ring");if(r1)r1.style.setProperty("--p",p);}
     /* 조이스틱에서 방향 사다리꼴 안에 있으면 그쪽 칸에 붙은 것으로 보고 주황 테두리를 그립니다.
        시선 점은 붙이지 않고 실제 시선을 계속 따라갑니다. */
     if(lookEl)lookEl.classList.toggle("is-snap",S.nav==="joy"&&!!DIR[zone]);
@@ -892,7 +924,7 @@ function compose(list){
   });
   function showNav(){
     Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"),function(el){el.hidden=el.dataset.nav!==S.nav});
-    focus=5;jz=null;jc=null;firstBlink=0;dwellT=0;armed=true;raw=null;
+    focus=5;jz=null;jc=null;flickDir=null;firstBlink=0;dwellT=0;armed=true;raw=null;
     placeBoard();
   }
   function range(id,out,key,fmt){
@@ -902,6 +934,7 @@ function compose(list){
   }
   range("gap","gapOut","gap",function(v){return v.toFixed(1)+"초"});
   range("dwell","dwellOut","dwell",function(v){return v.toFixed(1)+"초"});
+  range("joyBack","joyBackOut","back",function(v){return v.toFixed(1)+"초"});
   range("noise","noiseOut","noise",function(v){return v?"±"+v+"px":"없음"});
   $("showGaze").addEventListener("change",function(){S.showGaze=this.checked});
 
