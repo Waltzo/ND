@@ -115,7 +115,16 @@ button,input{font:inherit;color:inherit}
 .panel{position:fixed;inset:0 0 0 auto;margin:0;width:min(380px,100%);height:100%;max-height:100%;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink);padding:16px;overflow:auto;flex-direction:column;gap:16px}
 .panel[open]{display:flex}
 .panel::backdrop{background:rgba(10,20,26,.45)}
-.panel__head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.panel__head{display:flex;align-items:center;gap:12px}
+.panel__head h1{flex:1;min-width:0}
+/* 설정은 처음 화면(단추 목록)과 묶음별 화면으로 나뉩니다 */
+.page{display:flex;flex-direction:column;gap:16px}
+.page[hidden],#setBack[hidden]{display:none}
+.page>h2:first-child{border-top:0;padding-top:0;margin-top:0}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.menu button{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:12px;cursor:pointer;min-height:76px}
+.menu button b{font-size:15px;font-family:var(--font-display)}
+.menu button span{font-size:12px;color:var(--muted);line-height:1.35}
 .panel h2{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.06em;margin:6px 0 -6px;padding-top:14px;border-top:1px solid var(--line)}
 .panel h1{font-size:16px;margin:0;font-family:var(--font-display)}
 .panel p{margin:0;color:var(--muted);font-size:13px}
@@ -207,22 +216,30 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 
 <dialog class="panel" id="settings" aria-labelledby="setTitle">
   <div class="panel__head">
+    <button class="btn" id="setBack" type="button" hidden>‹ 설정</button>
     <h1 id="setTitle">보호자 설정</h1>
     <button class="btn" id="closeSet" type="button">닫기</button>
   </div>
-  <p>설정을 여는 동안에는 시선 입력이 멈춥니다. 바꾼 값은 바로 적용됩니다.</p>
 
-  <h2>소리와 글</h2>
+  <!-- 처음 화면: 자주 쓰는 단추와, 설정 묶음으로 들어가는 단추 -->
+  <section class="page" data-page="menu">
+    <p>설정을 여는 동안에는 시선 입력이 멈춥니다. 바꾼 값은 바로 적용됩니다.</p>
+    <div class="row">
+      <button class="btn" id="soundBtn" type="button" aria-pressed="false">소리 켜기</button>
+      <button class="btn" id="clearBtn" type="button">모두 지우기</button>
+    </div>
+    <div class="menu" id="setMenu">
+      <button type="button" data-go="voice"><b>목소리</b><span>목소리, 빠르기, 높이, 크기</span></button>
+      <button type="button" data-go="screen"><b>화면</b><span>화면 꺼짐 방지</span></button>
+      <button type="button" data-go="pick"><b>고르기와 확인</b><span>9칸 직접, 조이스틱, 깜빡임, 응시</span></button>
+      <button type="button" data-go="camera"><b>입력과 카메라</b><span>마우스, 카메라, 보정, 깜빡임, 호출음</span></button>
+      <button type="button" data-go="remote"><b>리모컨</b><span>스위치봇 기기와 리모컨 칸</span></button>
+      <button type="button" data-go="words"><b>자주 쓰는 단어</b><span>단어 8개</span></button>
+      <button type="button" data-go="etc"><b>시험과 규칙</b><span>마우스 시험, 입력 규칙</span></button>
+    </div>
+  </section>
 
-  <div class="row">
-    <button class="btn" id="soundBtn" type="button" aria-pressed="false">소리 켜기</button>
-    <button class="btn" id="clearBtn" type="button">모두 지우기</button>
-  </div>
-
-  <h2>화면</h2>
-  <label class="check" for="wakeChk"><input type="checkbox" id="wakeChk" checked>화면 꺼짐 방지</label>
-  <p id="wakeNote">이 화면을 보는 동안 화면이 저절로 꺼지지 않게 합니다.</p>
-
+  <section class="page" data-page="voice" data-title="목소리" hidden>
   <h2>목소리</h2>
   <div class="field">
     <label class="field__top" for="voice"><span>목소리</span></label>
@@ -242,7 +259,15 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <input type="range" id="vVol" min="0.1" max="1" step="0.05" value="1">
   </div>
   <div class="row"><button class="btn" id="voiceTest" type="button">들어 보기</button></div>
+  </section>
 
+  <section class="page" data-page="screen" data-title="화면" hidden>
+  <h2>화면</h2>
+  <label class="check" for="wakeChk"><input type="checkbox" id="wakeChk" checked>화면 꺼짐 방지</label>
+  <p id="wakeNote">이 화면을 보는 동안 화면이 저절로 꺼지지 않게 합니다.</p>
+  </section>
+
+  <section class="page" data-page="pick" data-title="고르기와 확인" hidden>
   <h2>고르는 방식</h2>
   <div class="field">
     <div class="field__top"><span>고르는 방식</span></div>
@@ -253,7 +278,6 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <p data-nav="joy">화면을 대각선으로 넷으로 나눈 위, 아래, 왼쪽, 오른쪽 어디를 보든 그쪽 칸에 붙어 테두리가 주황색이 됩니다. 화면 가장자리나 모서리, 화면 밖을 봐도 그쪽으로 칩니다. 붙은 채로 확인하면 그쪽 칸이 가운데로 옵니다. 가운데를 보고 확인하면 가운데에 온 칸을 고릅니다. 글자나 숫자를 넣고 나면 다시 가운데에서 시작합니다.</p>
     <p data-nav="direct">고를 칸을 직접 보고 확인합니다.</p>
   </div>
-
   <h2>확인 방식</h2>
   <div class="field">
     <div class="field__top"><span>확인 방식</span></div>
@@ -274,21 +298,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <label class="field__top" for="dwell"><span>응시 시간</span><output id="dwellOut">1.0초</output></label>
     <input type="range" id="dwell" min="0.5" max="3" step="0.1" value="1.0">
   </div>
-  <h2>리모컨 (스위치봇)</h2>
-  <p>리모컨 칸을 확인하면 아래에서 정한 8칸이 열립니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 리모컨 화면에 머물러서 음량처럼 여러 번 누를 수 있습니다.</p>
-  <div class="field">
-    <label class="field__top" for="rbUrl"><span>중계 주소</span></label>
-    <input type="text" id="rbUrl" placeholder="https://이름.계정.workers.dev" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
-  </div>
-  <div class="field">
-    <label class="field__top" for="rbPass"><span>암호</span></label>
-    <input type="password" id="rbPass" autocomplete="off">
-    <p>스위치봇은 웹 페이지에서 바로 부를 수 없어 중계가 하나 필요합니다. 만드는 방법은 worker/switchbot-relay.js 파일 맨 위에 적혀 있습니다. 주소와 암호는 이 기기에만 저장합니다.</p>
-  </div>
-  <div class="row"><button class="btn" id="rbLoad" type="button">기기 불러오기</button></div>
-  <p id="rbNote" role="status">중계 주소와 암호를 넣고 기기를 불러오면 아래에서 칸을 정할 수 있습니다.</p>
-  <div id="rbSlots"></div>
+  </section>
 
+  <section class="page" data-page="camera" data-title="입력과 카메라" hidden>
   <h2>입력 방식</h2>
   <div class="field">
     <div class="field__top"><span>입력 방식</span></div>
@@ -323,14 +335,26 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <input type="range" id="eyeAlarm" min="0" max="10" step="1" value="3">
     <p>눈을 이 시간 넘게 감고 있으면 어느 화면에서든 호출음이 울립니다. 소리를 꺼 두어도 울립니다. 0으로 두면 끕니다.</p>
   </div>
+  </section>
 
-  <h2>시안 시험용</h2>
-  <p>마우스 방식에서는 포인터가 시선을 대신합니다.</p>
+  <section class="page" data-page="remote" data-title="리모컨" hidden>
+  <h2>리모컨 (스위치봇)</h2>
+  <p>리모컨 칸을 확인하면 아래에서 정한 8칸이 열립니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 리모컨 화면에 머물러서 음량처럼 여러 번 누를 수 있습니다.</p>
   <div class="field">
-    <label class="field__top" for="noise"><span>시선 떨림 흉내</span><output id="noiseOut">없음</output></label>
-    <input type="range" id="noise" min="0" max="80" step="10" value="0">
+    <label class="field__top" for="rbUrl"><span>중계 주소</span></label>
+    <input type="text" id="rbUrl" placeholder="https://이름.계정.workers.dev" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
   </div>
-  <label class="check" for="showGaze"><input type="checkbox" id="showGaze" checked>시선 점 보이기</label>
+  <div class="field">
+    <label class="field__top" for="rbPass"><span>암호</span></label>
+    <input type="password" id="rbPass" autocomplete="off">
+    <p>스위치봇은 웹 페이지에서 바로 부를 수 없어 중계가 하나 필요합니다. 만드는 방법은 worker/switchbot-relay.js 파일 맨 위에 적혀 있습니다. 주소와 암호는 이 기기에만 저장합니다.</p>
+  </div>
+  <div class="row"><button class="btn" id="rbLoad" type="button">기기 불러오기</button></div>
+  <p id="rbNote" role="status">중계 주소와 암호를 넣고 기기를 불러오면 아래에서 칸을 정할 수 있습니다.</p>
+  <div id="rbSlots"></div>
+  </section>
+
+  <section class="page" data-page="words" data-title="자주 쓰는 단어" hidden>
   <h2>자주 쓰는 단어</h2>
   <div class="field">
     <div class="field__top"><span>자주 쓰는 단어 등록</span><output>8개</output></div>
@@ -342,7 +366,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     </div>
     <p>여기서 고치면 자판에 바로 반영되고 이 기기에 저장됩니다.</p>
   </div>
+  </section>
 
+  <section class="page" data-page="etc" data-title="시험과 규칙" hidden>
+  <h2>시안 시험용</h2>
+  <p>마우스 방식에서는 포인터가 시선을 대신합니다.</p>
+  <div class="field">
+    <label class="field__top" for="noise"><span>시선 떨림 흉내</span><output id="noiseOut">없음</output></label>
+    <input type="range" id="noise" min="0" max="80" step="10" value="0">
+  </div>
+  <label class="check" for="showGaze"><input type="checkbox" id="showGaze" checked>시선 점 보이기</label>
   <h2>입력 규칙</h2>
   <div class="how" style="border-top:0;padding-top:0">
     <ol>
@@ -357,6 +390,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>묶음 안에서는 가운데가 뒤로입니다.</li>
     </ol>
   </div>
+  </section>
 </dialog>
 
 <script>
@@ -603,8 +637,21 @@ function compose(list){
     return row*3+col+1;
   }
   var dlg=$("settings");
+  /* 설정 화면 넘기기: 처음 화면의 단추로 묶음 화면에 들어가고, 뒤로 단추로 돌아옵니다 */
+  function showPage(key){
+    var title="보호자 설정";
+    Array.prototype.forEach.call(dlg.querySelectorAll(".page"),function(pg){
+      pg.hidden=pg.dataset.page!==key;
+      if(!pg.hidden&&pg.dataset.title)title=pg.dataset.title;
+    });
+    $("setTitle").textContent=title;
+    $("setBack").hidden=key==="menu";
+    dlg.scrollTop=0;
+  }
+  $("setMenu").addEventListener("click",function(e){var b=e.target.closest("button[data-go]");if(b)showPage(b.dataset.go);});
+  $("setBack").addEventListener("click",function(){showPage("menu");$("setMenu").querySelector("button").focus();});
   $("openSet").addEventListener("click",function(){
-    raw=null;firstBlink=0;
+    raw=null;firstBlink=0;showPage("menu");
     try{dlg.showModal();}catch(err){dlg.setAttribute("open","");}
   });
   function closeSet(){try{dlg.close();}catch(err){dlg.removeAttribute("open");}}
