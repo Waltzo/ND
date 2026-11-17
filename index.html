@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-/* 배치: 3x3 칸. 1 자주 쓰는 단어, 2 지우기, 3 지니야(기가지니 호출), 4 자음 묶음, 5 내가 쓴 말(고르면 말하기), 6 모음 묶음, 7 자음 묶음, 8 숫자, 9 복합 모음 묶음 */
+/* 배치: 3x3 칸. 1 자주 쓰는 단어, 2 지우기, 3 리모컨(스위치봇), 4 자음 묶음, 5 내가 쓴 말(고르면 말하기), 6 모음 묶음, 7 자음 묶음, 8 숫자, 9 복합 모음 묶음 */
 :root{
   --bg:#EDF1F2;
   --surface:#FFFFFF;
@@ -129,7 +129,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
 .words{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .field>select{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 8px;font-size:13px}
-.words input,.field>input[type=text]{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;font-size:13px}
+/* 리모컨 칸 설정: 칸마다 이름, 기기, 동작 */
+.rb{display:flex;flex-direction:column;gap:5px;border:1px solid var(--line);border-radius:8px;padding:8px}
+.rb+.rb{margin-top:8px}
+.rb__top{font-size:12px;color:var(--muted)}
+.rb select,.rb input{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;font-size:13px}
+.rb [hidden]{display:none}
+.words input,.field>input[type=text],.field>input[type=password]{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;font-size:13px}
 .row{display:flex;gap:8px}
 .btn{flex:1;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px}
 .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -268,16 +274,20 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <label class="field__top" for="dwell"><span>응시 시간</span><output id="dwellOut">1.0초</output></label>
     <input type="range" id="dwell" min="0.5" max="3" step="0.1" value="1.0">
   </div>
-  <h2>기가지니</h2>
-  <p>지니야 칸을 확인하면 호출어를 먼저 말하고, 잠시 기다린 뒤 쓴 말을 읽습니다. 소리가 켜져 있어야 합니다.</p>
+  <h2>리모컨 (스위치봇)</h2>
+  <p>리모컨 칸을 확인하면 아래에서 정한 8칸이 열립니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 리모컨 화면에 머물러서 음량처럼 여러 번 누를 수 있습니다.</p>
   <div class="field">
-    <label class="field__top" for="wake"><span>호출어</span></label>
-    <input type="text" id="wake" maxlength="10" value="지니야">
+    <label class="field__top" for="rbUrl"><span>중계 주소</span></label>
+    <input type="text" id="rbUrl" placeholder="https://이름.계정.workers.dev" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
   </div>
   <div class="field">
-    <label class="field__top" for="wakeGap"><span>호출 뒤 기다리는 시간</span><output id="wakeGapOut">1.5초</output></label>
-    <input type="range" id="wakeGap" min="0.5" max="4" step="0.5" value="1.5">
+    <label class="field__top" for="rbPass"><span>암호</span></label>
+    <input type="password" id="rbPass" autocomplete="off">
+    <p>스위치봇은 웹 페이지에서 바로 부를 수 없어 중계가 하나 필요합니다. 만드는 방법은 worker/switchbot-relay.js 파일 맨 위에 적혀 있습니다. 주소와 암호는 이 기기에만 저장합니다.</p>
   </div>
+  <div class="row"><button class="btn" id="rbLoad" type="button">기기 불러오기</button></div>
+  <p id="rbNote" role="status">중계 주소와 암호를 넣고 기기를 불러오면 아래에서 칸을 정할 수 있습니다.</p>
+  <div id="rbSlots"></div>
 
   <h2>입력 방식</h2>
   <div class="field">
@@ -343,7 +353,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>내가 쓴 말 칸을 확인하면 쓴 글을 말합니다. 말한 뒤에도 글은 남아 있습니다.</li>
       <li>지우기 칸은 짧게 두 번 깜빡이면 낱자 하나를, 길게 한 번 감았다 뜨면 글자 하나를, 길게 두 번이면 전체를 지웁니다. 마우스는 0.6초 넘게 눌렀다 떼는 것이 길게 깜빡임입니다.</li>
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
-      <li>지니야 칸은 쓴 말을 기가지니에게 명령으로 전합니다. 쓴 말이 없으면 호출어만 말합니다.</li>
+      <li>리모컨 칸을 확인하면 설정에서 정한 8칸이 열립니다. 칸을 확인하면 스위치봇으로 그 동작을 보냅니다.</li>
       <li>묶음 안에서는 가운데가 뒤로입니다.</li>
     </ol>
   </div>
@@ -401,13 +411,13 @@ function compose(list){
   var CDOUBLE={"ㄱ":"ㄲ","ㄷ":"ㄸ","ㅂ":"ㅃ","ㅅ":"ㅆ","ㅈ":"ㅉ"};
   var WORDS=["예","아니오","아파요","물 주세요","화장실","고마워요","도와주세요","자세 바꿔주세요"];
   try{var saved=JSON.parse(localStorage.getItem("nundam-words"));if(saved&&saved.length===8)WORDS=saved;}catch(err){}
-  var KIND={C:["자음","--c-cons"],V:["모음","--c-vowel"],F:["기능","--c-func"],S:["말하기","--c-speak"],W:["단어","--c-speak"],N:["숫자","--c-func"]};
+  var KIND={C:["자음","--c-cons"],V:["모음","--c-vowel"],F:["기능","--c-func"],R:["리모컨","--c-speak"],W:["단어","--c-speak"],N:["숫자","--c-func"]};
   var $=function(id){return document.getElementById(id)};
   var stage=$("stage"),gazeEl=$("gaze");
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
-  var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,wake:"지니야",wakeGap:1.5,input:"mouse",nav:"direct"};
+  var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,input:"mouse",nav:"direct"};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, 7 8 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
@@ -425,7 +435,7 @@ function compose(list){
   function mainMap(){
     var m={1:{type:"words",kind:"W",label:"자주 쓰는 단어",sub:"8개"},
            2:{type:"back",kind:"F",label:"지우기",sub:"두 번: 낱자 · 길게: 한 글자 · 길게 두 번: 전체"},
-           3:{type:"genie",kind:"S",label:S.wake,sub:"쓴 말을 기가지니에게"},
+           3:{type:"remote",kind:"R",label:"리모컨",sub:remoteCount()?"TV, 에어컨 등":"설정에서 칸을 정해 주세요"},
            5:{type:"input"},
            8:{type:"num",kind:"N"}};
     [4,6,7,9].forEach(function(z){m[z]={type:"group",kind:GROUPS[z].kind,name:GROUPS[z].name}});
@@ -459,10 +469,18 @@ function compose(list){
     WORDS.forEach(function(w,i){if(w)m[WSLOT[i]]={type:"word",kind:"W",label:w,sub:"",text:w}});
     return m;
   }
+  /* 리모컨 화면: 보호자가 설정에서 정한 8칸(remote.js) */
+  function remoteButtons(){var R=window.NundamRemote;return R?R.buttons():[]}
+  function remoteCount(){return remoteButtons().filter(Boolean).length}
+  function remoteMap(){
+    var m={5:{type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"}};
+    remoteButtons().forEach(function(b,i){if(b)m[WSLOT[i]]={type:"rbtn",kind:"R",label:b.label,sub:b.sub,i:i}});
+    return m;
+  }
   function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 
   function render(){
-    cur=view===null?mainMap():(view==="W"?wordMap():(view==="N"?numMap(num):groupMap(view,dblOn)));
+    cur=view===null?mainMap():(view==="W"?wordMap():(view==="N"?numMap(num):(view==="R"?remoteMap():groupMap(view,dblOn))));
     var text=compose(list);
     for(var z=1;z<=9;z++){
       var t=tiles[z],d=cur[z],cls="tile",html="";
@@ -744,19 +762,14 @@ function compose(list){
       view=null;
     }
     else if(d.type==="back"){list.pop();}
-    else if(d.type==="genie"){
-      /* 호출어를 먼저 말하고, 기가지니가 들을 준비를 할 시간을 둔 뒤 명령을 말합니다. 소리가 켜져 있어야 합니다. */
-      var cmd=compose(list).trim();
-      if(S.sound){
-        if(cmd){
-          speak(S.wake,function(){setTimeout(function(){speak(cmd)},S.wakeGap*1000)});
-          past.push(S.wake+", "+cmd);list=[];
-        }else speak(S.wake);
-      }
+    else if(d.type==="remote"){view="R";}
+    else if(d.type==="rbtn"){
+      /* 리모컨 칸: 스위치봇으로 보내고 이 화면에 그대로 머뭅니다(음량처럼 여러 번 누르기) */
+      if(window.NundamRemote)window.NundamRemote.send(d.i);
     }
     armed=false;dwellT=0;
     /* 글자나 숫자를 넣었거나 화면이 바뀌면 다시 가운데에서 시작합니다 */
-    if(view!==view0||d.type==="input"||d.type==="genie"){focus=5;placeBoard();}
+    if(view!==view0||d.type==="input"){focus=5;placeBoard();}
     render();tick(880,0.12);
     var t=tiles[z];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
@@ -842,8 +855,6 @@ function compose(list){
   }
   range("gap","gapOut","gap",function(v){return v.toFixed(1)+"초"});
   range("dwell","dwellOut","dwell",function(v){return v.toFixed(1)+"초"});
-  range("wakeGap","wakeGapOut","wakeGap",function(v){return v.toFixed(1)+"초"});
-  $("wake").addEventListener("input",function(){S.wake=this.value.trim()||"지니야";if(view===null)render();});
   range("noise","noiseOut","noise",function(v){return v?"±"+v+"px":"없음"});
   $("showGaze").addEventListener("change",function(){S.showGaze=this.checked});
 
@@ -889,10 +900,11 @@ function compose(list){
 
   /* 입력 방식: 마우스 / 카메라 */
   var noticeEl=$("notice"),noticeT=0;
-  function notice(t,ms){
+  /* quiet: 소리로 읽지 않고 글자만 보여 줍니다 */
+  function notice(t,ms,quiet){
     clearTimeout(noticeT);
     noticeEl.textContent=t;noticeEl.hidden=!t;
-    if(t){speak(t);noticeT=setTimeout(function(){noticeEl.hidden=true},ms||6000);}
+    if(t){if(!quiet)speak(t);noticeT=setTimeout(function(){noticeEl.hidden=true},ms||6000);}
   }
   function setInput(v,why){
     S.input=v;raw=null;camZone=null;locked=false;firstBlink=0;dwellT=0;
@@ -921,6 +933,7 @@ function compose(list){
     longBlink:function(){if(S.input==="camera")longBlink()},
     lock:function(on){locked=!!on;if(locked){raw=null;camZone=null;firstBlink=0;}},
     setInput:setInput,notice:notice,
+    render:function(){render()},
     nav:function(){return S.nav},
     setNav:function(v){var b=document.querySelector('#navSeg [data-v="'+v+'"]');if(b)b.click();},speak:speak,tick:tick,alarm:alarm,
     closeSettings:closeSet,
@@ -931,6 +944,7 @@ function compose(list){
   showMode();showNav();render();layout();requestAnimationFrame(frame);
 })();
 </script>
+<script src="remote.js"></script>
 <script src="gaze-core.js"></script>
 <script src="gaze.js"></script>
 </body>
