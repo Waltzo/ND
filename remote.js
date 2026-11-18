@@ -6,21 +6,24 @@
   "use strict";
   var N=window.Nundam;
   if(!N)return;
-  var KEY="nundam-remote",VER=2;
+  var KEY="nundam-remote",VER=3;
   /* 리모컨 화면의 자리는 정해져 있고, 보호자는 칸마다 기기와 동작만 정합니다.
        1 채널 및 볼륨 묶음   2 위     3 OTT 묶음
        4 왼쪽                5 선택   6 오른쪽
        7 나가기              8 아래   9 이전
      7 나가기는 눈담의 처음 화면으로 돌아가고(자판이 놓습니다), 9 이전은 리모컨의 뒤로 버튼입니다.
      묶음 안의 자리도 정해져 있습니다. 가운데 5 는 나가기(리모컨 첫 화면으로)이고 자판이 놓습니다.
-       채널 및 볼륨: 1 채널 위로  2 2개씩(켜고 끄기)  3 볼륨 위로  4 채널 아래로  6 볼륨 아래로
+       채널 및 볼륨: 1 볼륨 위로    2 2개씩(켜고 끄기)  3 채널 위로
+                     4 음소거       5 나가기            6 편성표
+                     7 볼륨 아래로                      9 채널 아래로
        OTT:          1 넷플릭스   2 디즈니 플러스
-     twice 는 "2개씩" 칸의 자리입니다. 켜 두면 그 묶음의 칸을 확인할 때마다 두 번 보냅니다.
+     twice 는 "2개씩" 칸의 자리입니다. 켜 두면 볼륨과 채널 위아래(slots 의 셋째 값이 있는 칸)를 확인할 때마다 두 번 보냅니다.
+     음소거와 편성표는 두 번 보내면 도로 꺼지므로 늘 한 번만 보냅니다.
      leave 가 있는 묶음은 칸을 확인하면 바로 리모컨 첫 화면으로 돌아갑니다(OTT 를 켠 뒤 방향으로 고르도록).
      그 밖의 화면은 나가기를 확인해야만 한 단계 위로 나갑니다.
      cfg.buttons 의 순서: 방향, 선택, 이전(PAD 순서), 그 뒤로 묶음의 칸들(GROUPS 와 slots 순서) */
   var PAD=[[2,"위"],[4,"왼쪽"],[5,"선택"],[6,"오른쪽"],[8,"아래"],[9,"이전"]];
-  var GROUPS=[{id:"chvol",z:1,name:"채널 및 볼륨 설정",twice:2,slots:[[1,"채널 위로"],[3,"볼륨 위로"],[4,"채널 아래로"],[6,"볼륨 아래로"]]},
+  var GROUPS=[{id:"chvol",z:1,name:"채널 및 볼륨 설정",twice:2,slots:[[1,"볼륨 위로",1],[3,"채널 위로",1],[4,"음소거"],[6,"편성표"],[7,"볼륨 아래로",1],[9,"채널 아래로",1]]},
     {id:"ott",z:3,name:"OTT 설정",leave:true,slots:[[1,"넷플릭스"],[2,"디즈니 플러스"]]}];
   var SLOTS=PAD.length;
   GROUPS.forEach(function(g){g.first=SLOTS;SLOTS+=g.slots.length;});   /* first: 그 묶음 첫 칸의 번호 */
@@ -44,8 +47,15 @@
       if(typeof saved.url==="string")cfg.url=saved.url;
       if(typeof saved.pass==="string")cfg.pass=saved.pass;
       if(Array.isArray(saved.targets))cfg.targets=saved.targets;
-      /* 예전 8칸 배치로 저장한 칸은 자리가 달라 버립니다 */
+      /* 예전 8칸 배치(v 없음)로 저장한 칸은 자리가 달라 버립니다.
+         v2 는 채널 및 볼륨 묶음이 네 칸이던 때라, 칸을 지금 순서로 옮깁니다 */
       if(saved.v===VER&&Array.isArray(saved.buttons))cfg.buttons=saved.buttons.slice(0,SLOTS);
+      else if(saved.v===2&&Array.isArray(saved.buttons)){
+        [0,1,2,3,4,5,7,6,11,10,12,13].forEach(function(to,from){
+          while(cfg.buttons.length<=to)cfg.buttons.push(null);
+          cfg.buttons[to]=saved.buttons[from]||null;
+        });
+      }
     }
   }catch(err){}
   while(cfg.buttons.length<SLOTS)cfg.buttons.push(null);
@@ -138,7 +148,7 @@
     var b=cfg.buttons[i];
     if(filled(b)&&!target(b.key)){N.notice(b.label+" 칸은 아직 기기를 연결하지 않았습니다. 설정에서 기기를 불러와 연결해 주세요",5000);return Promise.resolve(false);}
     if(!ready(b)){N.notice("이 칸은 아직 정해지지 않았습니다. 설정에서 정해 주세요",4000);return Promise.resolve(false);}
-    var t=target(b.key),g=groupOf(i),two=twice&&!!g&&!!g.twice;
+    var t=target(b.key),g=groupOf(i),two=twice&&!!g&&!!g.twice&&!!g.slots[i-g.first][2];
     function once(){
       if(t.kind==="scene")return call("POST","/v1.1/scenes/"+encodeURIComponent(t.id)+"/execute");
       var a=actionOf(b),val=String(b.param||"").trim(),body;

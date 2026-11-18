@@ -59,7 +59,7 @@ function boot({ store = {}, devices = { deviceList: [], infraredRemoteList: [] }
   vm.runInNewContext(SRC, ctx);
   const R = window.NundamRemote;
   /* 칸 i 의 입력들: 기기, 동작, 값, 안내.
-     0~5 위, 왼쪽, 선택, 오른쪽, 아래, 이전. 6~9 채널 위로, 볼륨 위로, 채널 아래로, 볼륨 아래로. 10 11 넷플릭스, 디즈니 플러스 */
+     0~5 위, 왼쪽, 선택, 오른쪽, 아래, 이전. 6~11 볼륨 위로, 채널 위로, 음소거, 편성표, 볼륨 아래로, 채널 아래로. 12 13 넷플릭스, 디즈니 플러스 */
   const slot = (i) => {
     let found = null;
     (function walk(n) { n.kids.forEach((k) => (k.attrs["data-i"] === String(i) ? (found = k) : walk(k))); })(ids.rbSlots);
@@ -72,7 +72,7 @@ function boot({ store = {}, devices = { deviceList: [], infraredRemoteList: [] }
   const saved = () => JSON.parse(store["nundam-remote"]);
   return { R, ids, slot, pick, type, saved, plain, notices, calls, waits, world, store };
 }
-const RELAY = JSON.stringify({ url: "https://relay.example.workers.dev", pass: "open-sesame", v: 2, targets: [], buttons: [] });
+const RELAY = JSON.stringify({ url: "https://relay.example.workers.dev", pass: "open-sesame", v: 3, targets: [], buttons: [] });
 const TV = { deviceId: "01-TV", deviceName: "거실 TV", remoteType: "TV" };
 const AC = { deviceId: "02-AC", deviceName: "안방 에어컨", remoteType: "Air Conditioner" };
 
@@ -82,7 +82,7 @@ async function test(name, fn) {
   catch (err) { failed++; console.log("  실패  " + name + "\n        " + err.message); }
 }
 
-const UP = 0, CH_UP = 6, VOL_UP = 7, CH_DOWN = 8, NETFLIX = 10, DISNEY = 11;
+const UP = 0, VOL_UP = 6, CH_UP = 7, MUTE = 8, CH_DOWN = 11, NETFLIX = 12, DISNEY = 13;
 
 await test("아무것도 정하지 않아도 리모컨 화면의 자리는 그대로 보인다", () => {
   const n = boot({ store: { "nundam-remote": RELAY } });
@@ -97,15 +97,17 @@ await test("아무것도 정하지 않아도 리모컨 화면의 자리는 그�
     9: { label: "이전", sub: "설정 전", i: 5 },
   });
   assert.deepStrictEqual(n.plain(n.R.screen("chvol")), {
-    1: { label: "채널 위로", sub: "설정 전", i: 6 },
+    1: { label: "볼륨 위로", sub: "설정 전", i: 6 },
     2: { label: "2개씩", sub: "한 번에 두 번 보내기로", twice: false },
-    3: { label: "볼륨 위로", sub: "설정 전", i: 7 },
-    4: { label: "채널 아래로", sub: "설정 전", i: 8 },
-    6: { label: "볼륨 아래로", sub: "설정 전", i: 9 },
+    3: { label: "채널 위로", sub: "설정 전", i: 7 },
+    4: { label: "음소거", sub: "설정 전", i: 8 },
+    6: { label: "편성표", sub: "설정 전", i: 9 },
+    7: { label: "볼륨 아래로", sub: "설정 전", i: 10 },
+    9: { label: "채널 아래로", sub: "설정 전", i: 11 },
   });
   assert.deepStrictEqual(n.plain(n.R.screen("ott")), {
-    1: { label: "넷플릭스", sub: "설정 전", i: 10, leave: true },
-    2: { label: "디즈니 플러스", sub: "설정 전", i: 11, leave: true },
+    1: { label: "넷플릭스", sub: "설정 전", i: 12, leave: true },
+    2: { label: "디즈니 플러스", sub: "설정 전", i: 13, leave: true },
   });
   assert.strictEqual(n.R.count(), 0);
 });
@@ -133,13 +135,14 @@ await test("칸 이름은 정해져 있어 기기와 동작만 정한다", async
   assert.deepStrictEqual(JSON.parse(n.calls[0].init.body), { command: "UP", parameter: "default", commandType: "customize" });
 });
 
-await test("2개씩을 켜면 채널 및 볼륨 묶음의 칸만 두 번 보낸다", async () => {
+await test("2개씩을 켜면 볼륨과 채널 위아래만 두 번 보낸다", async () => {
   const n = boot({ store: { "nundam-remote": RELAY }, devices: { deviceList: [], infraredRemoteList: [TV] } });
   await n.R.load();
   n.pick(n.slot(VOL_UP).dev, "ir:01-TV");
   n.pick(n.slot(VOL_UP).act, "volumeAdd");
   n.pick(n.slot(UP).dev, "ir:01-TV");
   n.pick(n.slot(NETFLIX).dev, "ir:01-TV");
+  n.pick(n.slot(MUTE).dev, "ir:01-TV");
   n.calls.length = 0;
   await n.R.send(VOL_UP);
   assert.strictEqual(n.calls.length, 1);
@@ -154,7 +157,8 @@ await test("2개씩을 켜면 채널 및 볼륨 묶음의 칸만 두 번 보낸�
   n.calls.length = 0;
   await n.R.send(UP);
   await n.R.send(NETFLIX);
-  assert.strictEqual(n.calls.length, 2);
+  await n.R.send(MUTE);
+  assert.strictEqual(n.calls.length, 3);
   n.R.setTwice(false);
   n.calls.length = 0;
   await n.R.send(VOL_UP);
@@ -247,7 +251,7 @@ await test("정한 칸은 다시 열어도 남아 있다", () => {
   const again = boot({ store: first.store });
   const s = again.slot(CH_DOWN);
   assert.deepStrictEqual([s.dev.value, s.act.value], ["plan:ir:TV", "channelSub"]);
-  assert.strictEqual(again.R.screen("chvol")[4].sub, "기기 연결 전");
+  assert.strictEqual(again.R.screen("chvol")[9].sub, "기기 연결 전");
 });
 
 await test("예전 8칸 배치로 저장한 칸은 버리고 중계 주소와 기기 목록은 남긴다", () => {
@@ -259,7 +263,23 @@ await test("예전 8칸 배치로 저장한 칸은 버리고 중계 주소와 �
   assert.strictEqual(n.R.screen()[2].sub, "설정 전");
   assert.strictEqual(n.ids.rbUrl.value, "https://relay.example.workers.dev");
   n.pick(n.slot(UP).dev, "ir:01-TV");
-  assert.strictEqual(n.saved().v, 2);
+  assert.strictEqual(n.saved().v, 3);
+});
+
+await test("채널 및 볼륨 묶음이 네 칸이던 때 저장한 칸은 지금 자리로 옮긴다", () => {
+  const b = (cmd) => ({ label: "x", key: "plan:ir:TV", cmd, param: "" });
+  const old = JSON.stringify({ url: "https://relay.example.workers.dev", pass: "open-sesame", v: 2, targets: [],
+    buttons: [null, null, null, null, null, b("turnOff"), b("channelAdd"), b("volumeAdd"), b("channelSub"), b("volumeSub"), b("turnOn"), null] });
+  const n = boot({ store: { "nundam-remote": old } });
+  const at = (g, z) => { const t = n.R.screen(g)[z]; return [t.label, t.sub, n.slot(t.i).act.value]; };
+  assert.deepStrictEqual(at(null, 9), ["이전", "기기 연결 전", "turnOff"]);
+  assert.deepStrictEqual(at("chvol", 1), ["볼륨 위로", "기기 연결 전", "volumeAdd"]);
+  assert.deepStrictEqual(at("chvol", 3), ["채널 위로", "기기 연결 전", "channelAdd"]);
+  assert.deepStrictEqual(at("chvol", 7), ["볼륨 아래로", "기기 연결 전", "volumeSub"]);
+  assert.deepStrictEqual(at("chvol", 9), ["채널 아래로", "기기 연결 전", "channelSub"]);
+  assert.deepStrictEqual(at("ott", 1), ["넷플릭스", "기기 연결 전", "turnOn"]);
+  assert.strictEqual(n.R.screen("chvol")[4].sub, "설정 전");
+  assert.strictEqual(n.R.count(), 6);
 });
 
 console.log("\n" + passed + "개 통과, " + failed + "개 실패");
