@@ -6,12 +6,36 @@
   "use strict";
   var N=window.Nundam;
   if(!N)return;
-  var KEY="nundam-remote",SLOTS=8;
-  var PLACE=["왼쪽 위","위","오른쪽 위","왼쪽","오른쪽","왼쪽 아래","아래","오른쪽 아래"];
+  var KEY="nundam-remote",VER=2;
+  /* 리모컨 화면의 자리는 정해져 있고, 보호자는 칸마다 기기와 동작만 정합니다.
+       1 채널 및 볼륨 묶음   2 위     3 OTT 묶음
+       4 왼쪽                5 선택   6 오른쪽
+       7 나가기              8 아래   9 이전
+     7 나가기는 눈담의 처음 화면으로 돌아가고(자판이 놓습니다), 9 이전은 리모컨의 뒤로 버튼입니다.
+     묶음 안의 자리도 정해져 있습니다. 가운데 5 는 나가기(리모컨 첫 화면으로)이고 자판이 놓습니다.
+       채널 및 볼륨: 1 채널 위로  2 2개씩(켜고 끄기)  3 볼륨 위로  4 채널 아래로  6 볼륨 아래로
+       OTT:          1 넷플릭스   2 디즈니 플러스
+     twice 는 "2개씩" 칸의 자리입니다. 켜 두면 그 묶음의 칸을 확인할 때마다 두 번 보냅니다.
+     leave 가 있는 묶음은 칸을 확인하면 바로 리모컨 첫 화면으로 돌아갑니다(OTT 를 켠 뒤 방향으로 고르도록).
+     그 밖의 화면은 나가기를 확인해야만 한 단계 위로 나갑니다.
+     cfg.buttons 의 순서: 방향, 선택, 이전(PAD 순서), 그 뒤로 묶음의 칸들(GROUPS 와 slots 순서) */
+  var PAD=[[2,"위"],[4,"왼쪽"],[5,"선택"],[6,"오른쪽"],[8,"아래"],[9,"이전"]];
+  var GROUPS=[{id:"chvol",z:1,name:"채널 및 볼륨 설정",twice:2,slots:[[1,"채널 위로"],[3,"볼륨 위로"],[4,"채널 아래로"],[6,"볼륨 아래로"]]},
+    {id:"ott",z:3,name:"OTT 설정",leave:true,slots:[[1,"넷플릭스"],[2,"디즈니 플러스"]]}];
+  var SLOTS=PAD.length;
+  GROUPS.forEach(function(g){g.first=SLOTS;SLOTS+=g.slots.length;});   /* first: 그 묶음 첫 칸의 번호 */
+  function groupOf(i){
+    for(var k=0;k<GROUPS.length;k++)if(i>=GROUPS[k].first&&i<GROUPS[k].first+GROUPS[k].slots.length)return GROUPS[k];
+    return null;
+  }
+  /* 칸 i 의 정해진 이름 */
+  function nameOf(i){var g=groupOf(i);return (g?g.slots[i-g.first]:PAD[i])[1]}
+  var twice=false;         /* "2개씩"이 켜져 있는지. 묶음을 나가면 자판이 끕니다 */
+  var TWICE_GAP=500;       /* 두 번 보낼 때 사이 간격(ms). 너무 붙으면 한 번으로 읽힐 수 있습니다 */
   var $=function(id){return document.getElementById(id)};
 
   /* cfg.targets: 불러온 기기와 장면 [{key, kind:"ir"|"dev"|"scene", id, name, type}]
-     cfg.buttons: 칸 8개 [{label, key, cmd, param} 또는 null]
+     cfg.buttons: 칸 [{label, key, cmd, param} 또는 null]. 순서는 위 설명대로이고, label 은 그 자리의 정해진 이름입니다.
      key 가 "plan:" 으로 시작하면 기기 없이 종류만 미리 정해 둔 칸입니다(아래 PLANS). */
   var cfg={url:"",pass:"",targets:[],buttons:[]};
   try{
@@ -20,11 +44,13 @@
       if(typeof saved.url==="string")cfg.url=saved.url;
       if(typeof saved.pass==="string")cfg.pass=saved.pass;
       if(Array.isArray(saved.targets))cfg.targets=saved.targets;
-      if(Array.isArray(saved.buttons))cfg.buttons=saved.buttons;
+      /* 예전 8칸 배치로 저장한 칸은 자리가 달라 버립니다 */
+      if(saved.v===VER&&Array.isArray(saved.buttons))cfg.buttons=saved.buttons.slice(0,SLOTS);
     }
   }catch(err){}
   while(cfg.buttons.length<SLOTS)cfg.buttons.push(null);
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(cfg));}catch(err){}}
+  cfg.buttons.forEach(function(b,i){if(b&&typeof b==="object")b.label=nameOf(i)});   /* 칸 이름은 자리가 정합니다 */
+  function save(){cfg.v=VER;try{localStorage.setItem(KEY,JSON.stringify(cfg));}catch(err){}}
   function target(key){
     for(var i=0;i<cfg.targets.length;i++)if(cfg.targets[i].key===key)return cfg.targets[i];
     return null;
@@ -112,16 +138,18 @@
     var b=cfg.buttons[i];
     if(filled(b)&&!target(b.key)){N.notice(b.label+" 칸은 아직 기기를 연결하지 않았습니다. 설정에서 기기를 불러와 연결해 주세요",5000);return Promise.resolve(false);}
     if(!ready(b)){N.notice("이 칸은 아직 정해지지 않았습니다. 설정에서 정해 주세요",4000);return Promise.resolve(false);}
-    var t=target(b.key),p;
-    if(t.kind==="scene")p=call("POST","/v1.1/scenes/"+encodeURIComponent(t.id)+"/execute");
-    else{
+    var t=target(b.key),g=groupOf(i),two=twice&&!!g&&!!g.twice;
+    function once(){
+      if(t.kind==="scene")return call("POST","/v1.1/scenes/"+encodeURIComponent(t.id)+"/execute");
       var a=actionOf(b),val=String(b.param||"").trim(),body;
       if(b.cmd===CUSTOM)body={command:val,parameter:"default",commandType:"customize"};
       else if(b.cmd===RAW)body={command:val,parameter:"default",commandType:"command"};
       else body={command:b.cmd,parameter:a.need?val:"default",commandType:"command"};
-      p=call("POST","/v1.1/devices/"+encodeURIComponent(t.id)+"/commands",body);
+      return call("POST","/v1.1/devices/"+encodeURIComponent(t.id)+"/commands",body);
     }
-    return p.then(function(){N.notice(b.label+" 보냈습니다",1500,true);return true;},
+    var p=once();
+    if(two)p=p.then(function(){return new Promise(function(done){setTimeout(done,TWICE_GAP)})}).then(once);
+    return p.then(function(){N.notice(b.label+(two?" 두 번":"")+" 보냈습니다",1500,true);return true;},
       function(why){N.notice(b.label+" 보내지 못했습니다. "+why,6000);return false;});
   }
 
@@ -154,7 +182,7 @@
     },function(why){note("불러오지 못했습니다. "+why);});
   }
 
-  /* ---------- 설정 화면: 칸 8개 ---------- */
+  /* ---------- 설정 화면: 방향, 선택, 이전과 묶음 둘. 칸 이름은 모두 정해져 있습니다 ---------- */
   function el(tag,attrs,text){
     var e=document.createElement(tag),k;
     for(k in attrs)e.setAttribute(k,attrs[k]);
@@ -165,18 +193,30 @@
     var box=$("rbSlots");
     if(!box)return;
     box.textContent="";
-    for(var i=0;i<SLOTS;i++)box.appendChild(slot(i));
+    function part(title,open){
+      var d=el("details",{"class":"rbgroup"});
+      if(open)d.setAttribute("open","");
+      d.appendChild(el("summary",{},title));
+      box.appendChild(d);
+      return d;
+    }
+    var pad=part("방향, 선택, 이전 (칸 2 4 5 6 8 9)",true);
+    PAD.forEach(function(p,k){pad.appendChild(slot(k,"칸 "+p[0]+" · "+p[1]))});
+    GROUPS.forEach(function(g){
+      var d=part(g.name+" 묶음 (칸 "+g.z+")",false);
+      g.slots.forEach(function(p,k){d.appendChild(slot(g.first+k,"칸 "+p[0]+" · "+p[1]))});
+    });
   }
-  function slot(i){
-    var b=cfg.buttons[i]||{label:"",key:"",cmd:"",param:""};
-    var wrap=el("div",{"class":"rb"});
-    wrap.appendChild(el("div",{"class":"rb__top"},"칸 "+(i+1)+" · "+PLACE[i]));
-    var name=el("input",{type:"text",maxlength:"12",placeholder:"칸에 보일 이름","aria-label":"칸 "+(i+1)+" 이름"});
-    var dev=el("select",{"aria-label":"칸 "+(i+1)+" 기기"});
-    var act=el("select",{"aria-label":"칸 "+(i+1)+" 동작"});
-    var extra=el("input",{type:"text",maxlength:"40","aria-label":"칸 "+(i+1)+" 값",autocapitalize:"off",spellcheck:"false"});
+  /* title: 이 칸을 부르는 말. 칸 이름은 정해져 있어 보호자는 기기와 동작(과 값)만 정합니다 */
+  function slot(i,title){
+    var b=cfg.buttons[i]||{label:nameOf(i),key:"",cmd:"",param:""};
+    var wrap=el("div",{"class":"rb","data-i":i});
+    wrap.appendChild(el("div",{"class":"rb__top"},title));
+    var dev=el("select",{"aria-label":title+" 기기"});
+    var act=el("select",{"aria-label":title+" 동작"});
+    var extra=el("input",{type:"text",maxlength:"40","aria-label":title+" 값",autocapitalize:"off",spellcheck:"false"});
     var state=el("div",{"class":"rb__top"});
-    name.value=b.label||"";extra.value=b.param||"";
+    extra.value=b.param||"";
     dev.appendChild(el("option",{value:""},"쓰지 않음"));
     var got=el("optgroup",{label:"불러온 기기"}),plan=el("optgroup",{label:"아직 없는 기기 (종류만 정해 두기)"});
     cfg.targets.forEach(function(t){
@@ -197,7 +237,7 @@
     }
     function hint(nb){
       if(!nb)return "";
-      if(!filled(nb))return !nb.label?"이름을 넣어 주세요":"값을 넣어 주세요";
+      if(!filled(nb))return "값을 넣어 주세요";
       return target(nb.key)?"":"기기 연결 전입니다. 기기를 불러온 뒤 위에서 기기를 골라 주세요";
     }
     function showExtra(){
@@ -207,14 +247,10 @@
       extra.placeholder=a&&a.need?a.need:"";
       return a;
     }
-    var auto=false;        /* 이름을 눈담이 채웠는지. 보호자가 직접 쓴 이름은 건드리지 않습니다 */
-    function commit(autoName){
-      var t=shape(dev.value),a=showExtra();
-      /* 이름이 비었거나 눈담이 채운 것이면 고른 동작으로 채웁니다(바꿔 써도 됩니다) */
-      if(autoName&&t&&a&&(auto||!name.value.trim())){
-        name.value=(a.v===CUSTOM||a.v===RAW||a.v==="execute")?t.name.slice(0,12):a.t;auto=true;
-      }
-      cfg.buttons[i]=t?{label:name.value.trim(),key:t.key,cmd:act.value,param:extra.value.trim()}:null;
+    function commit(){
+      var t=shape(dev.value);
+      showExtra();
+      cfg.buttons[i]=t?{label:nameOf(i),key:t.key,cmd:act.value,param:extra.value.trim()}:null;
       save();
       state.textContent=hint(cfg.buttons[i]);
       N.render();
@@ -222,11 +258,10 @@
     fillActs(b.cmd);
     showExtra();
     state.textContent=shape(b.key)?hint(b):"";
-    dev.addEventListener("change",function(){if(!fillActs(act.value))extra.value="";commit(true);});
-    act.addEventListener("change",function(){extra.value="";commit(true);});
-    name.addEventListener("input",function(){auto=false;commit(false);});
-    extra.addEventListener("input",function(){commit(false);});
-    wrap.appendChild(name);wrap.appendChild(dev);wrap.appendChild(act);wrap.appendChild(extra);wrap.appendChild(state);
+    dev.addEventListener("change",function(){if(!fillActs(act.value))extra.value="";commit();});
+    act.addEventListener("change",function(){extra.value="";commit();});
+    extra.addEventListener("input",commit);
+    wrap.appendChild(dev);wrap.appendChild(act);wrap.appendChild(extra);wrap.appendChild(state);
     return wrap;
   }
 
@@ -237,16 +272,38 @@
   if(cfg.targets.length)note("저장해 둔 기기 "+cfg.targets.length+"개가 있습니다. 스위치봇 앱에서 바꾼 것이 있으면 다시 불러와 주세요.");
   build();
 
+  /* 다 채운 칸이면 자판에 보여 줄 모습, 아니면 null */
+  function tile(i){
+    var b=cfg.buttons[i];
+    if(!filled(b))return null;
+    var t=target(b.key);
+    return {label:b.label,sub:t?t.name:"기기 연결 전",i:i};
+  }
+
   window.NundamRemote={
-    /* 자판에 보여 줄 칸 8개: 다 채운 칸은 {label, sub}, 아니면 null.
-       기기 연결 전인 칸도 보여 주되, 확인하면 보내지 않고 알려 줍니다(send) */
-    buttons:function(){
-      return cfg.buttons.map(function(b){
-        if(!filled(b))return null;
-        var t=target(b.key);
-        return {label:b.label,sub:t?t.name:"기기 연결 전"};
+    /* 자판에 보여 줄 칸들 {자리: 칸}. group 이 없으면 리모컨 첫 화면, 있으면 그 묶음 안.
+       보내는 칸은 {label, sub, i} (확인하면 리모컨 첫 화면으로 돌아갈 칸은 leave:true 도), 묶음 칸은 {label, sub, group}, "2개씩" 칸은 {label, sub, twice:지금 켜짐}.
+       나가기(첫 화면 7, 묶음 안 5)는 자판이 놓습니다.
+       아직 정하지 않았거나 기기 연결 전인 칸도 보여 주되, 확인하면 보내지 않고 알려 줍니다(send) */
+    screen:function(group){
+      var m={};
+      function put(z,name,i){m[z]=tile(i)||{label:name,sub:"설정 전",i:i}}
+      if(!group){
+        PAD.forEach(function(p,k){put(p[0],p[1],k)});
+        GROUPS.forEach(function(g){m[g.z]={label:g.name,sub:"묶음",group:g.id}});
+        return m;
+      }
+      GROUPS.forEach(function(g){
+        if(g.id!==group)return;
+        g.slots.forEach(function(p,k){put(p[0],p[1],g.first+k);if(g.leave)m[p[0]].leave=true;});
+        if(g.twice)m[g.twice]=twice?{label:"1개씩",sub:"한 번에 한 번 보내기로",twice:true}:{label:"2개씩",sub:"한 번에 두 번 보내기로",twice:false};
       });
+      return m;
     },
+    /* "2개씩" 켜고 끄기 */
+    setTwice:function(on){twice=!!on},
+    /* 다 채운 칸 수 */
+    count:function(){var n=0;for(var i=0;i<SLOTS;i++)if(tile(i))n++;return n;},
     send:send,load:load
   };
   N.render();

@@ -138,9 +138,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
 .words{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .field>select{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 8px;font-size:13px}
-/* 리모컨 칸 설정: 칸마다 이름, 기기, 동작 */
+/* 리모컨 칸 설정: 칸마다 기기, 동작 */
 .rb{display:flex;flex-direction:column;gap:5px;border:1px solid var(--line);border-radius:8px;padding:8px}
-.rb+.rb{margin-top:8px}
+.rb+.rb,.rbgroup>.rb{margin-top:8px}
+.rbgroup{margin-top:10px}
+.rbgroup>summary{cursor:pointer;font-size:13px;font-weight:600;padding:4px 0}
 .rb__top{font-size:12px;color:var(--muted)}
 .rb select,.rb input{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:5px 8px;font-size:13px}
 .rb [hidden]{display:none}
@@ -344,7 +346,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 
   <section class="page" data-page="remote" data-title="리모컨" hidden>
   <h2>리모컨 (스위치봇)</h2>
-  <p>리모컨 칸을 확인하면 아래에서 정한 8칸이 열립니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 리모컨 화면에 머물러서 음량처럼 여러 번 누를 수 있습니다.</p>
+  <p>리모컨 칸을 확인하면 리모컨 화면이 열립니다. 가운데가 선택, 그 위아래와 양옆이 방향이고, 모서리에는 채널 및 볼륨 묶음, OTT 묶음, 나가기, 이전(리모컨의 뒤로 버튼)이 있습니다. 채널 및 볼륨 묶음에는 채널과 볼륨 위아래, OTT 묶음에는 넷플릭스와 디즈니 플러스가 있습니다. 자리는 정해져 있고 아래에서 칸마다 기기와 동작만 정합니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 그 화면에 머물러서 음량처럼 여러 번 누를 수 있고, 나가기를 확인해야 나갑니다. OTT 묶음만은 고르면 바로 리모컨 화면으로 돌아갑니다.</p>
   <div class="field">
     <label class="field__top" for="rbUrl"><span>중계 주소</span></label>
     <input type="text" id="rbUrl" placeholder="https://이름.계정.workers.dev" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
@@ -391,8 +393,9 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>내가 쓴 말 칸을 확인하면 쓴 글을 말합니다. 말한 뒤에도 글은 남아 있습니다.</li>
       <li>지우기 칸은 짧게 두 번 깜빡이면 낱자 하나를, 길게 한 번 감았다 뜨면 글자 하나를, 길게 두 번이면 전체를 지웁니다. 마우스는 0.6초 넘게 눌렀다 떼는 것이 길게 깜빡임입니다.</li>
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
-      <li>리모컨 칸을 확인하면 설정에서 정한 8칸이 열립니다. 칸을 확인하면 스위치봇으로 그 동작을 보냅니다.</li>
-      <li>묶음 안에서는 가운데가 뒤로입니다.</li>
+      <li>리모컨 칸을 확인하면 방향과 선택, 이전, 채널 및 볼륨 묶음, OTT 묶음이 열립니다. 칸을 확인하면 스위치봇으로 그 동작을 보냅니다.</li>
+      <li>묶음 안에서는 가운데가 뒤로입니다. 리모컨 화면에서는 가운데가 선택이라 왼쪽 아래 나가기로 처음 화면에 돌아갑니다. 오른쪽 아래 이전은 TV 화면에서 뒤로 가는 버튼입니다. 리모컨의 묶음 안에서는 가운데 나가기로 리모컨 화면에 돌아갑니다.</li>
+      <li>채널 및 볼륨 묶음에서 2개씩을 켜면 칸을 확인할 때마다 두 번 보냅니다. 묶음을 나가면 꺼집니다.</li>
     </ol>
   </div>
   </section>
@@ -457,7 +460,7 @@ function compose(list){
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
   var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,input:"mouse",nav:"direct",back:4};
-  var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, 7 8 9: 펼친 묶음 */
+  var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, "R": 리모컨, "R:묶음": 리모컨 묶음, 4 6 7 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
   var cur={};               /* 지금 각 칸이 하는 일 */
@@ -514,18 +517,26 @@ function compose(list){
     WORDS.forEach(function(w,i){if(w)m[WSLOT[i]]={type:"word",kind:"W",label:w,sub:"",text:w}});
     return m;
   }
-  /* 리모컨 화면: 보호자가 설정에서 정한 8칸(remote.js) */
-  function remoteButtons(){var R=window.NundamRemote;return R?R.buttons():[]}
-  function remoteCount(){return remoteButtons().filter(Boolean).length}
-  function remoteMap(){
-    var m={5:{type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"}};
-    remoteButtons().forEach(function(b,i){if(b)m[WSLOT[i]]={type:"rbtn",kind:"R",label:b.label,sub:b.sub,i:i}});
+  /* 리모컨 화면(remote.js): 2 4 5 6 8 은 방향과 선택, 9 는 이전(리모컨의 뒤로 버튼), 1 3 은 묶음, 7 은 나가기.
+     g 가 있으면 그 묶음 안: 자리가 정해진 칸들과 가운데 5 나가기(리모컨 첫 화면으로).
+     채널 및 볼륨 묶음의 "2개씩"은 켜 두면 확인할 때마다 두 번 보냅니다. 묶음을 나가면 꺼집니다 */
+  function remoteCount(){var R=window.NundamRemote;return R?R.count():0}
+  function remoteMap(g){
+    var R=window.NundamRemote,s=R?R.screen(g):{},m={};
+    for(var z in s){
+      var d=s[z];
+      m[z]=d.group?{type:"rgroup",kind:"R",label:d.label,sub:d.sub,g:d.group}:
+        ("twice" in d?{type:"rtwice",kind:"F",label:d.label,sub:d.sub,on:d.twice}:{type:"rbtn",kind:"R",label:d.label,sub:d.sub,i:d.i,leave:!!d.leave});
+    }
+    if(g)m[5]={type:"rback",kind:"F",label:"나가기",sub:"리모컨으로"};
+    else m[7]={type:"cancel",kind:"F",label:"나가기",sub:"처음 화면으로"};
     return m;
   }
+  function isRemote(v){return typeof v==="string"&&v.charAt(0)==="R"}
   function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 
   function render(){
-    cur=view===null?mainMap():(view==="W"?wordMap():(view==="N"?numMap(num):(view==="R"?remoteMap():groupMap(view,dblOn))));
+    cur=view===null?mainMap():(view==="W"?wordMap():(view==="N"?numMap(num):(isRemote(view)?remoteMap(view.slice(2)||null):groupMap(view,dblOn))));
     var text=compose(list);
     for(var z=1;z<=9;z++){
       var t=tiles[z],d=cur[z],cls="tile",html="";
@@ -789,7 +800,7 @@ function compose(list){
     if(S.sound){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(err){}
       speak("소리를 켰습니다");}
   });
-  $("clearBtn").addEventListener("click",function(){list=[];view=null;dblOn=false;focus=5;placeBoard();render()});
+  $("clearBtn").addEventListener("click",function(){if(window.NundamRemote)window.NundamRemote.setTwice(false);list=[];view=null;dblOn=false;focus=5;placeBoard();render()});
   WORDS.forEach(function(w,i){
     var el=$("w"+i);el.value=w;
     el.addEventListener("input",function(){
@@ -830,10 +841,14 @@ function compose(list){
       view=null;
     }
     else if(d.type==="back"){list.pop();}
-    else if(d.type==="remote"){view="R";}
+    else if(d.type==="remote"||d.type==="rback"){view="R";if(window.NundamRemote)window.NundamRemote.setTwice(false);}
+    else if(d.type==="rtwice"){window.NundamRemote.setTwice(!d.on);}
+    else if(d.type==="rgroup"){view="R:"+d.g;}
     else if(d.type==="rbtn"){
-      /* 리모컨 칸: 스위치봇으로 보내고 이 화면에 그대로 머뭅니다(음량처럼 여러 번 누르기) */
+      /* 리모컨 칸: 스위치봇으로 보내고 이 화면에 그대로 머뭅니다(음량처럼 여러 번 누르기). 나가기를 확인해야 나갑니다.
+         OTT 칸만은 보낸 뒤 바로 리모컨 첫 화면으로 돌아가 방향과 선택으로 이어서 고릅니다 */
       if(window.NundamRemote)window.NundamRemote.send(d.i);
+      if(d.leave)view="R";
     }
     armed=false;dwellT=0;
     /* 글자나 숫자를 넣었거나 화면이 바뀌면 다시 가운데에서 시작합니다 */
