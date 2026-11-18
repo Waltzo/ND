@@ -11,7 +11,8 @@
   var $=function(id){return document.getElementById(id)};
 
   /* cfg.targets: 불러온 기기와 장면 [{key, kind:"ir"|"dev"|"scene", id, name, type}]
-     cfg.buttons: 칸 8개 [{label, key, cmd, param} 또는 null] */
+     cfg.buttons: 칸 8개 [{label, key, cmd, param} 또는 null]
+     key 가 "plan:" 으로 시작하면 기기 없이 종류만 미리 정해 둔 칸입니다(아래 PLANS). */
   var cfg={url:"",pass:"",targets:[],buttons:[]};
   try{
     var saved=JSON.parse(localStorage.getItem(KEY));
@@ -27,6 +28,24 @@
   function target(key){
     for(var i=0;i<cfg.targets.length;i++)if(cfg.targets[i].key===key)return cfg.targets[i];
     return null;
+  }
+
+  /* ---------- 기기를 등록하기 전에 종류만 정해 두기 ---------- */
+  /* type 은 스위치봇이 알려 주는 리모컨 종류(remoteType) 그대로입니다. 동작 목록을 여기서 고릅니다. */
+  var PLANS=[["ir","TV","TV"],["ir","Set Top Box","셋톱박스"],["ir","Streamer","스트리밍 기기"],["ir","Air Conditioner","에어컨"],
+    ["ir","Fan","선풍기"],["ir","Light","조명"],["ir","Speaker","스피커"],["ir","DVD","DVD"],["ir","Others","그 밖의 리모컨"],
+    ["dev","","스위치봇 기기 (봇, 플러그 등)"],["scene","","장면"]
+  ].map(function(p){return {key:"plan:"+p[0]+":"+p[1],kind:p[0],type:p[1],name:p[2],plan:true}});
+  function planned(key){
+    for(var i=0;i<PLANS.length;i++)if(PLANS[i].key===key)return PLANS[i];
+    return null;
+  }
+  /* 칸이 가리키는 것: 불러온 기기, 없으면 미리 정해 둔 종류 */
+  function shape(key){return target(key)||planned(key)}
+  function irType(t){return String(t.type||"").replace(/^DIY\s*/i,"").toLowerCase()}
+  /* 미리 정해 둔 종류에 맞는 불러온 기기들 */
+  function matches(plan){
+    return cfg.targets.filter(function(t){return t.kind===plan.kind&&(plan.kind!=="ir"||irType(t)===irType(plan))});
   }
 
   /* ---------- 기기 종류마다 고를 수 있는 동작 ---------- */
@@ -52,16 +71,18 @@
     return a;
   }
   function actionOf(b){
-    var list=actionsFor(target(b.key));
+    var list=actionsFor(shape(b.key));
     for(var i=0;i<list.length;i++)if(list[i].v===b.cmd)return list[i];
     return null;
   }
-  /* 칸 설정이 보낼 수 있는 상태인지 */
-  function ready(b){
-    if(!b||!b.label||!target(b.key))return false;
+  /* 칸 설정이 다 채워졌는지(기기는 아직 없어도 됩니다) */
+  function filled(b){
+    if(!b||!b.label||!shape(b.key))return false;
     var a=actionOf(b);
     return !!a&&(!a.need||!!String(b.param||"").trim());
   }
+  /* 칸 설정이 보낼 수 있는 상태인지 */
+  function ready(b){return filled(b)&&!!target(b.key)}
 
   /* ---------- 중계로 보내기 ---------- */
   var CODES={151:"기기 종류가 맞지 않습니다",152:"기기를 찾지 못했습니다. 기기를 다시 불러와 주세요",160:"이 기기가 지원하지 않는 동작입니다",
@@ -89,6 +110,7 @@
   }
   function send(i){
     var b=cfg.buttons[i];
+    if(filled(b)&&!target(b.key)){N.notice(b.label+" 칸은 아직 기기를 연결하지 않았습니다. 설정에서 기기를 불러와 연결해 주세요",5000);return Promise.resolve(false);}
     if(!ready(b)){N.notice("이 칸은 아직 정해지지 않았습니다. 설정에서 정해 주세요",4000);return Promise.resolve(false);}
     var t=target(b.key),p;
     if(t.kind==="scene")p=call("POST","/v1.1/scenes/"+encodeURIComponent(t.id)+"/execute");
@@ -114,10 +136,21 @@
       (d.infraredRemoteList||[]).forEach(function(x){list.push({key:"ir:"+x.deviceId,kind:"ir",id:x.deviceId,name:x.deviceName||"이름 없음",type:x.remoteType||""})});
       (d.deviceList||[]).forEach(function(x){list.push({key:"dev:"+x.deviceId,kind:"dev",id:x.deviceId,name:x.deviceName||"이름 없음",type:x.deviceType||""})});
       sc.forEach(function(x){list.push({key:"scene:"+x.sceneId,kind:"scene",id:x.sceneId,name:x.sceneName||"이름 없음",type:"장면"})});
-      cfg.targets=list;save();build();N.render();
+      cfg.targets=list;
+      /* 미리 정해 둔 칸: 종류가 맞는 기기가 하나뿐이면 바로 연결하고, 여럿이면 보호자가 고릅니다 */
+      var linked=0,left=0;
+      cfg.buttons.forEach(function(b){
+        var p=b&&planned(b.key);
+        if(!p)return;
+        var m=p.kind==="ir"?matches(p):[];   /* 허브도 기기 목록에 들어 있어, 리모컨만 알아서 연결합니다 */
+        if(m.length===1){b.key=m[0].key;linked++;}else left++;
+      });
+      save();build();N.render();
       var ir=list.filter(function(t){return t.kind==="ir"}).length,n2=list.filter(function(t){return t.kind==="scene"}).length;
-      note(list.length?"리모컨 "+ir+"개, 기기 "+(list.length-ir-n2)+"개, 장면 "+n2+"개를 불러왔습니다. 아래에서 칸을 정해 주세요.":
-        "불러왔지만 등록된 기기가 없습니다. 스위치봇 앱에서 허브에 리모컨을 먼저 등록해 주세요.");
+      note(list.length?"리모컨 "+ir+"개, 기기 "+(list.length-ir-n2)+"개, 장면 "+n2+"개를 불러왔습니다."+
+          (linked?" 미리 정해 둔 칸 "+linked+"개를 기기에 연결했습니다.":"")+
+          (left?" 미리 정해 둔 칸 "+left+"개는 아래에서 기기를 골라 주세요.":(linked?"":" 아래에서 칸을 정해 주세요.")):
+        "불러왔지만 등록된 기기가 없습니다. 스위치봇 앱에서 허브에 리모컨을 먼저 등록해 주세요. 칸은 종류만 골라 미리 정해 둘 수 있습니다.");
     },function(why){note("불러오지 못했습니다. "+why);});
   }
 
@@ -144,19 +177,31 @@
     var extra=el("input",{type:"text",maxlength:"40","aria-label":"칸 "+(i+1)+" 값",autocapitalize:"off",spellcheck:"false"});
     var state=el("div",{"class":"rb__top"});
     name.value=b.label||"";extra.value=b.param||"";
-    dev.appendChild(el("option",{value:""},cfg.targets.length?"쓰지 않음":"먼저 기기를 불러와 주세요"));
+    dev.appendChild(el("option",{value:""},"쓰지 않음"));
+    var got=el("optgroup",{label:"불러온 기기"}),plan=el("optgroup",{label:"아직 없는 기기 (종류만 정해 두기)"});
     cfg.targets.forEach(function(t){
-      dev.appendChild(el("option",{value:t.key},t.name+" ("+(t.kind==="scene"?"장면":(t.type||(t.kind==="ir"?"리모컨":"기기")))+")"));
+      got.appendChild(el("option",{value:t.key},t.name+" ("+(t.kind==="scene"?"장면":(t.type||(t.kind==="ir"?"리모컨":"기기")))+")"));
     });
-    dev.value=target(b.key)?b.key:"";
-    function fillActs(){
-      var list=actionsFor(target(dev.value));
+    PLANS.forEach(function(p){plan.appendChild(el("option",{value:p.key},p.name))});
+    if(cfg.targets.length)dev.appendChild(got);
+    dev.appendChild(plan);
+    dev.value=shape(b.key)?b.key:"";
+    /* 기기를 바꿔도 같은 동작이 있으면 그대로 둡니다(종류만 정해 둔 칸에 기기를 연결할 때) */
+    function fillActs(keep){
+      var list=actionsFor(shape(dev.value)),had=false;
       act.textContent="";
-      list.forEach(function(a){act.appendChild(el("option",{value:a.v},a.t))});
+      list.forEach(function(a){act.appendChild(el("option",{value:a.v},a.t));if(a.v===keep)had=true;});
       act.hidden=!list.length;
+      if(had)act.value=keep;else if(list.length)act.selectedIndex=0;
+      return had;
+    }
+    function hint(nb){
+      if(!nb)return "";
+      if(!filled(nb))return !nb.label?"이름을 넣어 주세요":"값을 넣어 주세요";
+      return target(nb.key)?"":"기기 연결 전입니다. 기기를 불러온 뒤 위에서 기기를 골라 주세요";
     }
     function showExtra(){
-      var list=actionsFor(target(dev.value)),a=null;
+      var list=actionsFor(shape(dev.value)),a=null;
       list.forEach(function(x){if(x.v===act.value)a=x});
       extra.hidden=!(a&&a.need);
       extra.placeholder=a&&a.need?a.need:"";
@@ -164,23 +209,20 @@
     }
     var auto=false;        /* 이름을 눈담이 채웠는지. 보호자가 직접 쓴 이름은 건드리지 않습니다 */
     function commit(autoName){
-      var t=target(dev.value),a=showExtra();
+      var t=shape(dev.value),a=showExtra();
       /* 이름이 비었거나 눈담이 채운 것이면 고른 동작으로 채웁니다(바꿔 써도 됩니다) */
       if(autoName&&t&&a&&(auto||!name.value.trim())){
         name.value=(a.v===CUSTOM||a.v===RAW||a.v==="execute")?t.name.slice(0,12):a.t;auto=true;
       }
       cfg.buttons[i]=t?{label:name.value.trim(),key:t.key,cmd:act.value,param:extra.value.trim()}:null;
       save();
-      var nb=cfg.buttons[i];
-      state.textContent=!nb?"":(ready(nb)?"":(!nb.label?"이름을 넣어 주세요":"값을 넣어 주세요"));
+      state.textContent=hint(cfg.buttons[i]);
       N.render();
     }
-    fillActs();
-    if(b.cmd)act.value=b.cmd;
-    if(!act.value&&act.options.length)act.selectedIndex=0;
+    fillActs(b.cmd);
     showExtra();
-    state.textContent=b.key&&!ready(b)?(!b.label?"이름을 넣어 주세요":"값을 넣어 주세요"):"";
-    dev.addEventListener("change",function(){fillActs();if(act.options.length)act.selectedIndex=0;extra.value="";commit(true);});
+    state.textContent=shape(b.key)?hint(b):"";
+    dev.addEventListener("change",function(){if(!fillActs(act.value))extra.value="";commit(true);});
     act.addEventListener("change",function(){extra.value="";commit(true);});
     name.addEventListener("input",function(){auto=false;commit(false);});
     extra.addEventListener("input",function(){commit(false);});
@@ -196,11 +238,13 @@
   build();
 
   window.NundamRemote={
-    /* 자판에 보여 줄 칸 8개: 쓸 수 있는 칸은 {label, sub}, 아니면 null */
+    /* 자판에 보여 줄 칸 8개: 다 채운 칸은 {label, sub}, 아니면 null.
+       기기 연결 전인 칸도 보여 주되, 확인하면 보내지 않고 알려 줍니다(send) */
     buttons:function(){
       return cfg.buttons.map(function(b){
-        if(!ready(b))return null;
-        return {label:b.label,sub:target(b.key).name};
+        if(!filled(b))return null;
+        var t=target(b.key);
+        return {label:b.label,sub:t?t.name:"기기 연결 전"};
       });
     },
     send:send,load:load
