@@ -115,7 +115,8 @@ button,input{font:inherit;color:inherit}
 .panel{position:fixed;inset:0 0 0 auto;margin:0;width:min(380px,100%);height:100%;max-height:100%;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink);padding:16px;overflow:auto;flex-direction:column;gap:16px}
 .panel[open]{display:flex}
 .panel::backdrop{background:rgba(10,20,26,.45)}
-.panel__head{display:flex;align-items:center;gap:12px}
+/* 머리줄은 내용을 내려도 위에 붙어 있습니다. 창의 안쪽 여백(16px)까지 덮도록 바깥으로 넓힙니다 */
+.panel__head{display:flex;align-items:center;gap:12px;flex:none;position:sticky;top:0;z-index:2;margin:-16px -16px 0;padding:16px 16px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
 .panel__head h1{flex:1;min-width:0}
 /* 설정은 처음 화면(단추 목록)과 묶음별 화면으로 나뉩니다 */
 .page{display:flex;flex-direction:column;gap:16px}
