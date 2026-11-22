@@ -296,7 +296,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-go="camera"><b>입력과 카메라</b><span>마우스, 카메라, 보정, 호출음</span></button>
       <button type="button" data-go="blink"><b>눈 깜빡임 민감도</b><span>민감도, 깜빡임 시간 구분, 입력 대기 시간</span></button>
       <button type="button" data-go="remote"><b>리모컨</b><span>스위치봇 중계와 리모컨 기기</span></button>
-      <button type="button" data-go="words"><b>자주 쓰는 단어</b><span>단어 8개</span></button>
+      <button type="button" data-go="words"><b>자주 쓰는 단어</b><span>단어 12개</span></button>
       <button type="button" data-go="etc"><b>시험과 규칙</b><span>마우스 시험, 입력 규칙</span></button>
     </div>
   </section>
@@ -473,14 +473,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <section class="page" data-page="words" data-title="자주 쓰는 단어" hidden>
   <h2>자주 쓰는 단어</h2>
   <div class="field">
-    <div class="field__top"><span>자주 쓰는 단어 등록</span><output>8개</output></div>
+    <div class="field__top"><span>자주 쓰는 단어 등록</span><output>12개</output></div>
     <div class="words">
       <input type="text" id="w0" maxlength="20" aria-label="단어 1"><input type="text" id="w1" maxlength="20" aria-label="단어 2">
       <input type="text" id="w2" maxlength="20" aria-label="단어 3"><input type="text" id="w3" maxlength="20" aria-label="단어 4">
       <input type="text" id="w4" maxlength="20" aria-label="단어 5"><input type="text" id="w5" maxlength="20" aria-label="단어 6">
       <input type="text" id="w6" maxlength="20" aria-label="단어 7"><input type="text" id="w7" maxlength="20" aria-label="단어 8">
+      <input type="text" id="w8" maxlength="20" aria-label="단어 9"><input type="text" id="w9" maxlength="20" aria-label="단어 10">
+      <input type="text" id="w10" maxlength="20" aria-label="단어 11"><input type="text" id="w11" maxlength="20" aria-label="단어 12">
     </div>
-    <p>여기서 고치면 자판에 바로 반영되고 이 기기에 저장됩니다.</p>
+    <p>여기서 고치면 자판에 바로 반영되고 이 기기에 저장됩니다. 3*3 모드의 단어 화면에는 앞의 8개만 나오고, 모스픽 모드에는 12개가 모두 나옵니다.</p>
   </div>
   </section>
 
@@ -562,8 +564,17 @@ function compose(list){
   };
   var CSLOT=[1,3,4,6,7,8,9],WSLOT=[1,2,3,4,6,7,8,9];
   var CDOUBLE={"ㄱ":"ㄲ","ㄷ":"ㄸ","ㅂ":"ㅃ","ㅅ":"ㅆ","ㅈ":"ㅉ"};
-  var WORDS=["예","아니오","아파요","물 주세요","화장실","고마워요","도와주세요","자세 바꿔주세요"];
-  try{var saved=JSON.parse(localStorage.getItem("nundam-words"));if(saved&&saved.length===8)WORDS=saved;}catch(err){}
+  /* 자주 쓰는 단어 12개. 3*3 모드의 단어 화면은 칸이 8개라 앞의 8개만 쓰고, 모스픽 모드는 12개를 다 씁니다 */
+  var WORD_N=12;
+  var WORDS=["예","아니오","아파요","물 주세요","화장실","고마워요","도와주세요","자세 바꿔주세요","","","",""];
+  try{
+    var saved=JSON.parse(localStorage.getItem("nundam-words"));
+    /* 8개이던 때 저장한 것은 뒤를 빈칸으로 채웁니다 */
+    if(Array.isArray(saved)&&saved.length>=8){
+      WORDS=saved.slice(0,WORD_N).map(function(w){return typeof w==="string"?w:""});
+      while(WORDS.length<WORD_N)WORDS.push("");
+    }
+  }catch(err){}
   var KIND={C:["자음","--c-cons"],V:["모음","--c-vowel"],F:["기능","--c-func"],R:["리모컨","--c-speak"],W:["단어","--c-speak"],N:["숫자","--c-func"]};
   var $=function(id){return document.getElementById(id)};
   var stage=$("stage"),gazeEl=$("gaze");
@@ -634,7 +645,7 @@ function compose(list){
   }
   function wordMap(){
     var m={5:{type:"cancel",kind:"F",label:"뒤로",sub:"처음 화면으로"}};
-    WORDS.forEach(function(w,i){if(w)m[WSLOT[i]]={type:"word",kind:"W",label:w,sub:"",text:w}});
+    WSLOT.forEach(function(z,i){var w=WORDS[i];if(w)m[z]={type:"word",kind:"W",label:w,sub:"",text:w}});
     return m;
   }
   /* 리모컨 화면(remote.js): 2 4 5 6 8 은 방향과 선택, 9 는 이전(리모컨의 뒤로 버튼), 1 3 은 묶음, 7 은 나가기.
@@ -1070,10 +1081,12 @@ function compose(list){
   function morseOn(){return S.screen==="morse"}
   /* 길고 짧음을 가려야 하는 방식인지(마우스는 뗄 때 넣습니다) */
   function onRelease(){return morseOn()||S.nav==="count"}
-  /* 자주 쓰는 단어 화면: 단어 8개에 숫자 1~8 의 코드를 붙입니다 */
+  /* 자주 쓰는 단어 화면: 단어 12개(3칸씩 4줄). 앞의 10개는 숫자 1~9, 0 의 코드를, 나머지 둘은 ㄱ, ㄷ 의 코드를 씁니다.
+     이 화면에서는 기능 칸의 코드와만 겹치지 않으면 됩니다 */
+  var M_W=M_B[1].map(function(x){return x[1]}).concat(["..-",".-."]);
   /* [단어, 코드, 몇 번째 단어인지]. 비어 있는 단어도 자리는 둡니다(눌러서 채울 수 있게) */
   function morseWords(){
-    return WORDS.map(function(w,i){return [w,M_B[1][i][1],i]});
+    return WORDS.map(function(w,i){return [w,M_W[i],i]});
   }
   /* 단어 칸을 손으로 누르면 그 단어를 고칩니다(설정 > 자주 쓰는 단어와 같은 것을 고칩니다) */
   function editWord(i){
@@ -1196,8 +1209,8 @@ function compose(list){
       left=grp(M_R,3,5,M_R.map(function(x){return key("",x[0],x[1],!ok[x[2]])}).join(""));
     }else if(mPage==="W"){
       var w=morseWords();
-      /* 3칸씩. 손으로 누르면 고치기(data-w), 코드를 넣으면 문장에 넣고 읽어 줍니다 */
-      left=grp(w,3,3,w.map(function(x){return key("",x[0]||"(빈칸)",x[1],!x[0],"","",' data-w="'+x[2]+'"')}).join(""));
+      /* 3칸씩 4줄. 손으로 누르면 고치기(data-w), 코드를 넣으면 문장에 넣고 읽어 줍니다 */
+      left=grp(w,3,4,w.map(function(x){return key("",x[0]||"(빈칸)",x[1],!x[0],"","",' data-w="'+x[2]+'"')}).join(""));
     }else{
       var a=M_A[mPage],b=M_B[mPage];
       left=grp(a,4,Math.ceil(a.length/4),chars(a))+grp(b,4,Math.ceil(b.length/4),chars(b));
