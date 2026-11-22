@@ -512,6 +512,28 @@
   };
 
   /* 보정이 끝났을 때의 자세. 태블릿이 옮겨졌는지 볼 때 기준이 됩니다. */
+  /* ---------- 화면을 향하고 있는지(깜빡임 횟수 방식) ---------- */
+  /* 깜빡임 횟수 방식은 어느 칸을 보는지 쓰지 않으므로 9점 보정 대신 가운데 한 점만 봅니다.
+     그때의 눈동자 위치와 머리 각도를 기준으로, 지금 눈이 거기서 몇 도쯤 벗어났는지만 어림합니다. */
+  function centerRef(ms){
+    function med(k){return median(ms.map(function(m){return m[k]}))}
+    return {gx:med("gx"),gy:med("gy"),yaw:med("yaw"),pitch:med("pitch")};
+  }
+  /* 가운데를 볼 때보다 시선이 벗어난 각도(도). 눈동자 위치는 눈이 1라디안 돌 때 HEAD_K 만큼 움직이고(headShift 참고),
+     머리를 돌린 만큼은 그대로 더합니다. 머리만 돌리고 눈으로 화면을 보면 둘이 서로 지워집니다. */
+  function gazeOff(m,ref){
+    var k=180/Math.PI/HEAD_K;
+    return {x:(m.gx-ref.gx)*k+(m.yaw-ref.yaw),y:(m.gy-ref.gy)*k+(m.pitch-ref.pitch)};
+  }
+  var FACING={x:25,y:20};   /* 이 각도 안이면 화면을 향한 것으로 봅니다. 화면 끝(50cm 에서 약 14도)보다 넉넉하게 */
+  /* 두 눈이 다 보이고 화면 쪽을 향하고 있는지 */
+  function facing(m,ref,lim){
+    if(!m||!ref||m.eyes!==2)return false;
+    lim=lim||FACING;
+    var g=gazeOff(m,ref);
+    return Math.abs(g.x)<=lim.x&&Math.abs(g.y)<=lim.y;
+  }
+
   function baselineOf(ms){
     function med(k){return median(ms.map(function(m){return m[k]}))}
     return {ex:med("ex"),ey:med("ey"),distCm:med("distCm"),yaw:med("yaw"),pitch:med("pitch"),roll:med("roll")};
@@ -542,6 +564,7 @@
     Collector:Collector,HoldGate:HoldGate,
     FACE_PX:FACE_PX,searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
     postureCheck:postureCheck,quality:quality,needsLowRate:needsLowRate,FpsMeter:FpsMeter,
+    centerRef:centerRef,gazeOff:gazeOff,facing:facing,
     baselineOf:baselineOf,MoveDetector:MoveDetector
   };
 });

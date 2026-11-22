@@ -14,7 +14,7 @@
   var MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
   var stage=N.stage;
-  var mode="off";            /* off, loading, posture, calib, quick, verify, run */
+  var mode="off";            /* off, loading, posture, calib, quick, center, verify, run, sleep */
   var runId=0;               /* 켜고 끄기가 겹칠 때 늦게 끝난 준비 작업을 버리려고 셉니다 */
   var video=null,stream=null,vision=null,landmarker=null,libP=null;
   var lastVT=-1,lastInfer=0,minGap=0,errors=0;
@@ -25,6 +25,12 @@
   /* 쉬기: 화면을 안 보고 있으면 입력을 멈추고 쉽니다. 다시 4초 동안 화면을 보면 보정부터 다시 합니다. */
   var SLEEP_AFTER=8000,WAKE_LOOK=4000;
   var awaySince=null,lookSince=null,lookLast=0;
+  /* 깜빡임 횟수 방식: 9점 보정 대신 가운데 한 점만 보고(center), 눈이 화면을 향하는지만 가립니다 */
+  var ref=null;             /* 가운데를 볼 때의 눈동자 위치와 머리 각도 */
+  var runCount=false;       /* 지금 쓰는 중인 방식이 깜빡임 횟수인지(쓰는 중에 방식을 바꾸면 다시 맞춥니다) */
+  var faceSince=null;       /* 화면을 향하기 시작한 때 */
+  var FACE_BACK=500;        /* 이만큼 이어서 화면을 향해야 다시 보는 것으로 칩니다(떨림으로 쉬기가 미뤄지지 않게) */
+  function countNav(){return N.nav()==="count"}
   var flush=false,flushed=false;   /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
   var light=null,lightAt=0,lightCv=null;
   var blinkIdx=null;
@@ -396,13 +402,14 @@
     watchEyes(m,now);
     showDiag(m);
     /* 설정 창이 화면을 가리는 동안에는 점검과 보정을 멈추고, 닫으면 그 점부터 다시 합니다. */
-    if(N.settingsOpen()&&(mode==="posture"||mode==="calib"||mode==="quick"||mode==="verify")){
+    if(N.settingsOpen()&&(mode==="posture"||mode==="calib"||mode==="quick"||mode==="center"||mode==="verify")){
       gate.since=null;col.start(now);calLost=null;ver.t0=now;ver.zones=[];
       return;
     }
     if(mode==="posture")stepPosture(m,now);
     else if(mode==="calib")stepCalib(m,now);
     else if(mode==="quick")stepQuick(m,now);
+    else if(mode==="center")stepCenter(m,now);
     else if(mode==="verify")stepVerify(m,now);
     else if(mode==="run")stepRun(m,now);
     else if(mode==="sleep")stepSleep(m,now);
@@ -426,7 +433,8 @@
     if(prog>=1)afterPosture();
   }
   function afterPosture(){
-    if(wantFull||!model)enterCalib();else enterQuick();
+    if(countNav())enterCenter();
+    else if(wantFull||!model)enterCalib();else enterQuick();
   }
 
   /* ---------- 보정 ---------- */
@@ -547,6 +555,7 @@
     },4000);
   }
   function verifyNow(){
+    if(countNav()){N.notice("깜빡임 횟수 방식은 어느 칸을 보는지 쓰지 않아 정확도 확인이 없습니다.",5000);return;}
     if(!model||mode==="off"||mode==="loading")return;
     clearTimeout(resultT);
     N.closeSettings();ver.redone=true;enterVerify(false);
@@ -570,6 +579,23 @@
     saveCal();
     enterRun();
   }
+  /* 깜빡임 횟수 방식: 가운데 한 점만 봅니다. 어느 칸을 보는지는 쓰지 않으므로 9점 보정 모델은 건드리지 않습니다. */
+  function enterCenter(){
+    mode="center";N.lock(true);
+    screen("calib");
+    target(5,"가운데 점을 보고 계세요");
+    N.speak("가운데 점을 보세요");
+  }
+  function stepCenter(m,now){
+    if(lostTooLong(m,now)){enterPosture();return;}
+    if(pointStuck(now))return;
+    ui.dot.style.setProperty("--p",col.update(m,frameC,now));
+    if(!col.done())return;
+    tries=0;N.tick(880,0.08);
+    var ms=col.buf.map(function(s){return s.m});
+    ref=C.centerRef(ms);base=C.baselineOf(ms);
+    enterRun();
+  }
   function recalibrate(){
     if(mode==="off"||mode==="loading")return;
     clearTimeout(resultT);
@@ -578,8 +604,9 @@
 
   /* ---------- 쓰는 중 ---------- */
   function enterRun(){
-    mode="run";awaySince=null;
-    tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
+    mode="run";awaySince=null;faceSince=null;
+    runCount=countNav();
+    tracker=new C.Tracker({model:runCount?null:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
     tracker.setSense(C.sense(opt.sense));
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
@@ -590,28 +617,56 @@
     lookSince=null;lookLast=0;
     screen("sleep");
     ui.msg.textContent="쉬는 중입니다";
-    ui.sub.textContent="화면을 4초 동안 보고 있으면 시선을 다시 맞추고 시작합니다.";
+    ui.sub.textContent=runCount?"화면을 4초 동안 보고 있으면 가운데 점을 다시 보고 시작합니다.":"화면을 4초 동안 보고 있으면 시선을 다시 맞추고 시작합니다.";
     ui.bar.firstChild.style.setProperty("--p",0);
   }
   function stepSleep(m,now){
     tracker.away=0.15;                                 /* 화면 안을 볼 때만 보는 것으로 칩니다 */
     var out=tracker.step(m,now);
     lastOut=out;
-    if(out.pt&&!out.closed){if(lookSince===null)lookSince=now;lookLast=now;}
+    /* 깜빡임 횟수 방식은 시선 자리가 없으므로, 두 눈이 화면을 향하는지로 봅니다 */
+    var looking=runCount?(!out.closed&&C.facing(m,ref)):(!!out.pt&&!out.closed);
+    if(looking){if(lookSince===null)lookSince=now;lookLast=now;}
     else if(now-lookLast>600)lookSince=null;            /* 깜빡임 같은 짧은 끊김은 넘어갑니다 */
     var p=lookSince===null?0:Math.min(1,(now-lookSince)/WAKE_LOOK);
     ui.bar.firstChild.style.setProperty("--p",p);
     if(p>=1){
-      N.speak("시선을 다시 맞춥니다");
+      N.speak(runCount?"다시 시작합니다":"시선을 다시 맞춥니다");
       wantFull=false;enterPosture();                    /* 자세 점검 뒤 가운데 한 점 */
     }
   }
 
+  /* 깜빡임 횟수 방식으로 쓰는 중: 깜빡임만 읽고, 두 눈이 화면을 향하지 않은 채로 시간이 지나면 쉽니다. */
+  function stepRunCount(m,now){
+    tracker.longAnywhere=true;
+    var out=tracker.step(m,now);
+    lastOut=out;
+    N.setGaze(null);
+    /* 얼굴을 놓침, 한쪽 눈만 보임, 눈이 화면 밖을 향함, 눈을 오래 감음 */
+    var on=!out.closed&&C.facing(m,ref);
+    if(on){
+      if(faceSince===null)faceSince=now;
+      if(now-faceSince>=FACE_BACK)awaySince=null;
+    }else{
+      faceSince=null;
+      if(awaySince===null)awaySince=now;
+      if(now-awaySince>=SLEEP_AFTER){enterSleep();return;}
+    }
+    if(out.blink)N.blink();
+    if(out.long)N.longBlink();
+    if(mover.update(m,now)){
+      N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
+      enterPosture();
+      return;
+    }
+    checkQuality(m,now);
+  }
   function stepRun(m,now){
-    /* 조이스틱은 화면 밖을 봐도 그쪽 가장자리에 붙은 것으로 칩니다.
-       깜빡임 횟수 방식은 어디를 보는지 쓰지 않으므로, 화면 밖을 봐도 멈추지 않고 길게 깜빡임도 읽습니다. */
-    tracker.away=N.nav()==="direct"?0.3:1.5;
-    tracker.longAnywhere=N.nav()==="count";
+    /* 쓰는 중에 고르는 방식이 깜빡임 횟수와 시선 방식 사이에서 바뀌면, 그 방식에 맞게 다시 맞춥니다 */
+    if(countNav()!==runCount){enterPosture();return;}
+    if(runCount){stepRunCount(m,now);return;}
+    /* 조이스틱은 화면 밖을 봐도 그쪽 가장자리에 붙은 것으로 칩니다. */
+    tracker.away=N.nav()==="joy"?1.5:0.3;
     var out=tracker.step(m,now);
     lastOut=out;
     N.setGaze(out.pt,out.zone);

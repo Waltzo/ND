@@ -416,6 +416,23 @@ test("둔감하게 두어도 옆 칸 한가운데를 보면 1초 안에 바뀐�
   assert.strictEqual(look(tr,5,1000,t).zone,5);
   assert.strictEqual(look(tr,9,1000,t).zone,9);
 });
+test("가운데 한 점 기준으로 화면을 향하는지 가린다",function(){
+  var ms=[],i;
+  for(i=0;i<10;i++)ms.push(meas({gx:0.5,gy:0.5}));
+  var ref=G.centerRef(ms);
+  for(var z=1;z<=9;z++){var c=G.zoneCenter(z);assert.ok(G.facing(meas({gx:c.x,gy:c.y}),ref),"칸 "+z+" 을 볼 때");}
+  assert.ok(G.facing(meas({gx:0.02,gy:0.98}),ref),"화면 모서리");
+  assert.strictEqual(G.facing(meas({gx:1.6,gy:0.5}),ref),false,"화면 오른쪽 멀리");
+  assert.strictEqual(G.facing(meas({gx:-0.6,gy:0.5}),ref),false,"화면 왼쪽 멀리");
+  assert.strictEqual(G.facing(meas({gx:0.5,gy:2.2}),ref),false,"화면 아래 멀리");
+  assert.strictEqual(G.facing(null,ref),false,"얼굴이 없을 때");
+  var one=meas({gx:0.5,gy:0.5});one.eyes=1;
+  assert.strictEqual(G.facing(one,ref),false,"한쪽 눈만 보일 때");
+  /* 머리만 돌린 만큼도 벗어난 것으로 칩니다 */
+  var turned=meas({gx:0.5,gy:0.5});turned.yaw+=40;
+  assert.strictEqual(G.facing(turned,ref),false,"머리를 40도 돌렸을 때");
+  assert.ok(Math.abs(G.gazeOff(meas({gx:0.5,gy:0.5}),ref).x)<1);
+});
 test("깜빡임 횟수 방식에서는 시선 자리가 없어도 길게 깜빡임을 읽는다",function(){
   var tr=tracker(),t={v:0,log:[]};
   tr.model=null;                     /* 보정이 없어 시선 자리를 모르는 상태 */
