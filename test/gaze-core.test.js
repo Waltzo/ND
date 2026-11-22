@@ -469,6 +469,48 @@ test("눈을 뜰 때 감고 있던 시간을 알려 준다",function(){
   assert.strictEqual(op.length,1);
   assert.ok(op[0].dur>=330&&op[0].dur<=470,"감은 시간 "+op[0].dur);
 });
+test("고개를 돌린 채 눈만 화면을 보는 것은 화면을 향한 것으로 치지 않는다",function(){
+  var ms=[],i;
+  for(i=0;i<10;i++)ms.push(meas({gx:0.5,gy:0.5}));
+  var ref=G.centerRef(ms);
+  /* 고개를 35도 돌리고 눈동자는 반대로 돌려 시선은 화면 가운데에 둔 얼굴 */
+  var m=meas({gx:0.5,gy:0.5});
+  m.yaw+=35;m.gx-=35*Math.PI/180*G.HEAD_K;
+  assert.ok(Math.abs(G.gazeOff(m,ref).x)<1,"시선은 가운데");
+  assert.strictEqual(G.facing(m,ref),false);
+  var small=meas({gx:0.5,gy:0.5});small.yaw+=15;small.gx-=15*Math.PI/180*G.HEAD_K;
+  assert.strictEqual(G.facing(small,ref),true,"조금 돌린 것은 괜찮습니다");
+});
+test("화면을 보다가 깜빡이면 받아 주고, 딴 곳을 보다가 깜빡이면 받아 주지 않는다",function(){
+  var g=new G.FaceGate(),t=0,r;
+  g.reset(0);
+  function run(on,closed,ms){var end=t+ms;while(t<end){t+=33;r=g.update(on,closed,t);}return r;}
+  run(true,false,1000);
+  assert.strictEqual(run(false,true,1500).ok,true,"화면을 보다가 길게 감는 동안");
+  assert.strictEqual(g.update(false,false,t+=33).ok,true,"뜨는 순간(눈동자가 아직 안 잡혀도)");
+  run(true,false,600);
+  run(false,false,1200);                                   /* 딴 곳을 봄 */
+  assert.strictEqual(run(false,true,400).ok,false,"딴 곳을 보다가 감은 동안");
+  assert.strictEqual(g.update(false,false,t+=33).ok,false,"뜨는 순간");
+  run(true,false,300);
+  assert.strictEqual(run(false,true,300).ok,true,"다시 화면을 보다가 깜빡이면 받습니다");
+});
+test("눈을 뜬 채 화면을 보지 않으면 3초 뒤 쉬기, 감고 있는 시간은 세지 않는다",function(){
+  var g=new G.FaceGate(),t=0,r;
+  g.reset(0);
+  function run(on,closed,ms){var end=t+ms,hit=false;while(t<end){t+=33;r=g.update(on,closed,t);if(r.away)hit=true;}return hit;}
+  run(true,false,1000);
+  assert.strictEqual(run(false,false,2700),false,"3초가 되기 전");
+  assert.strictEqual(run(false,false,500),true,"3초를 넘김");
+  g.reset(t);
+  assert.strictEqual(run(false,true,6000),false,"감고 있는 동안은 세지 않습니다");
+  run(false,false,2000);
+  assert.strictEqual(run(true,false,200),false);
+  assert.strictEqual(run(false,false,1200),true,"잠깐(0.5초 안 되게) 본 것으로는 처음부터 다시 세지 않습니다");
+  g.reset(t);
+  run(false,false,2000);run(true,false,700);
+  assert.strictEqual(run(false,false,2700),false,"0.5초 넘게 이어서 보면 처음부터 다시 셉니다");
+});
 test("깜빡임 횟수 방식에서는 시선 자리가 없어도 길게 깜빡임을 읽는다",function(){
   var tr=tracker(),t={v:0,log:[]};
   tr.model=null;                     /* 보정이 없어 시선 자리를 모르는 상태 */

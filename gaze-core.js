@@ -536,14 +536,47 @@
     var k=180/Math.PI/HEAD_K;
     return {x:(m.gx-ref.gx)*k+(m.yaw-ref.yaw),y:(m.gy-ref.gy)*k+(m.pitch-ref.pitch)};
   }
-  var FACING={x:25,y:20};   /* 이 각도 안이면 화면을 향한 것으로 봅니다. 화면 끝(50cm 에서 약 14도)보다 넉넉하게 */
-  /* 두 눈이 다 보이고 화면 쪽을 향하고 있는지 */
+  /* x, y: 시선이 이 각도 안이면 화면을 향한 것으로 봅니다. 화면 끝(50cm 에서 약 14도)보다 넉넉하게.
+     yaw, pitch: 얼굴도 이 각도 안으로 화면 쪽을 향해야 합니다(고개를 돌린 채 눈만 화면을 보는 것은 치지 않습니다) */
+  var FACING={x:25,y:20,yaw:30,pitch:25};
+  /* 두 눈이 다 보이고, 얼굴과 시선이 화면 쪽을 향하고 있는지 */
   function facing(m,ref,lim){
     if(!m||!ref||m.eyes!==2)return false;
     lim=lim||FACING;
+    if(Math.abs(m.yaw-ref.yaw)>lim.yaw||Math.abs(m.pitch-ref.pitch)>lim.pitch)return false;
     var g=gazeOff(m,ref);
     return Math.abs(g.x)<=lim.x&&Math.abs(g.y)<=lim.y;
   }
+  /* 화면을 보고 있을 때만 깜빡임을 받아 주는 문지기(모스픽 모드).
+     update(on, closed, t) -> {ok, away}
+       on: 지금 얼굴과 시선이 화면을 향하는지(facing), closed: 눈을 감고 있는지
+       ok: 지금 읽힌 깜빡임을 받아 줄지. 눈을 감기 직전(graceMs 안)에 화면을 보고 있었어야 합니다.
+           감는 동안에는 눈동자가 안 보이므로, 감기 시작할 때 정한 것을 뜰 때까지 그대로 씁니다.
+       away: 눈을 뜬 채로 화면을 보지 않은 시간이 awayMs 를 넘었음(쉬기로 가야 함).
+             감고 있는 시간은 세지 않고, backMs 동안 이어서 화면을 보면 처음부터 다시 셉니다. */
+  function FaceGate(o){
+    o=o||{};
+    this.awayMs=o.awayMs==null?3000:o.awayMs;this.backMs=o.backMs==null?500:o.backMs;this.graceMs=o.graceMs==null?500:o.graceMs;
+    this.reset(0);
+  }
+  FaceGate.prototype.reset=function(t){
+    this.last=t;this.lastFace=t;this.faceSince=null;this.away=0;this.wasClosed=false;this.closeOk=true;
+  };
+  FaceGate.prototype.update=function(on,closed,t){
+    var dt=Math.max(0,t-this.last);this.last=t;
+    if(closed){
+      if(!this.wasClosed){this.wasClosed=true;this.closeOk=t-this.lastFace<=this.graceMs;}
+      return {ok:this.closeOk,away:false};
+    }
+    var ok=this.wasClosed?this.closeOk:t-this.lastFace<=this.graceMs;
+    this.wasClosed=false;
+    if(on){
+      this.lastFace=t;
+      if(this.faceSince===null)this.faceSince=t;
+      if(t-this.faceSince>=this.backMs)this.away=0;
+    }else{this.faceSince=null;this.away+=dt;}
+    return {ok:ok,away:this.away>=this.awayMs};
+  };
 
   function baselineOf(ms){
     function med(k){return median(ms.map(function(m){return m[k]}))}
@@ -575,7 +608,7 @@
     Collector:Collector,HoldGate:HoldGate,
     FACE_PX:FACE_PX,searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
     postureCheck:postureCheck,quality:quality,needsLowRate:needsLowRate,FpsMeter:FpsMeter,
-    centerRef:centerRef,gazeOff:gazeOff,facing:facing,
+    centerRef:centerRef,gazeOff:gazeOff,facing:facing,FaceGate:FaceGate,
     baselineOf:baselineOf,MoveDetector:MoveDetector
   };
 });

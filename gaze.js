@@ -30,6 +30,8 @@
   var runCount=false;       /* 지금 쓰는 중인 방식이 깜빡임 횟수인지(쓰는 중에 방식을 바꾸면 다시 맞춥니다) */
   var faceSince=null;       /* 화면을 향하기 시작한 때 */
   var FACE_BACK=500;        /* 이만큼 이어서 화면을 향해야 다시 보는 것으로 칩니다(떨림으로 쉬기가 미뤄지지 않게) */
+  /* 모스픽 모드: 얼굴과 시선이 화면을 향할 때만 깜빡임을 받고, 눈을 뜬 채 화면을 보지 않으면 곧 쉽니다 */
+  var faceGate=new C.FaceGate();
   function countNav(){return N.noGaze()}   /* 깜빡임 횟수 방식이거나 모스픽 모드 */
   var flush=false,flushed=false;   /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
   var light=null,lightAt=0,lightCv=null;
@@ -607,7 +609,7 @@
 
   /* ---------- 쓰는 중 ---------- */
   function enterRun(){
-    mode="run";awaySince=null;faceSince=null;
+    mode="run";awaySince=null;faceSince=null;faceGate.reset(performance.now());
     runCount=countNav();
     tracker=new C.Tracker({model:runCount?null:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
     tracker.setSense(C.sense(opt.sense));
@@ -645,11 +647,14 @@
     tracker.longAnywhere=true;
     var out=tracker.step(m,now);
     lastOut=out;
-    if(out.longReady)N.longCue();
+    /* 모스픽 모드는 화면을 보고 있을 때의 깜빡임만 받습니다. 깜빡임 횟수 방식은 가리지 않습니다. */
+    var look=C.facing(m,ref),gate=faceGate.update(look,out.closed,now),strict=N.morse(),take=!strict||gate.ok;
+    if(out.longReady&&take)N.longCue();
     if(out.opened)showBlink(out.dur);
     N.setGaze(null);
-    /* 얼굴을 놓침, 한쪽 눈만 보임, 눈이 화면 밖을 향함, 눈을 오래 감음 */
-    var on=!out.closed&&C.facing(m,ref);
+    if(strict&&gate.away){enterSleep();return;}
+    /* 얼굴을 놓침, 한쪽 눈만 보임, 얼굴이나 눈이 화면 밖을 향함, 눈을 오래 감음 */
+    var on=!out.closed&&look;
     if(on){
       if(faceSince===null)faceSince=now;
       if(now-faceSince>=FACE_BACK)awaySince=null;
@@ -658,8 +663,8 @@
       if(awaySince===null)awaySince=now;
       if(now-awaySince>=SLEEP_AFTER){enterSleep();return;}
     }
-    if(out.blink)N.blink();
-    if(out.long)N.longBlink();
+    if(out.blink&&take)N.blink();
+    if(out.long&&take)N.longBlink();
     if(mover.update(m,now)){
       N.notice("태블릿이 옮겨진 것 같습니다. 자세를 다시 확인합니다.",4000);
       enterPosture();
