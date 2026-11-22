@@ -645,6 +645,7 @@
     tracker.longAnywhere=true;
     var out=tracker.step(m,now);
     lastOut=out;
+    if(out.longReady)N.longCue();
     if(out.opened)showBlink(out.dur);
     N.setGaze(null);
     /* 얼굴을 놓침, 한쪽 눈만 보임, 눈이 화면 밖을 향함, 눈을 오래 감음 */
@@ -674,6 +675,7 @@
     tracker.away=N.nav()==="joy"?1.5:0.3;
     var out=tracker.step(m,now);
     lastOut=out;
+    if(out.longReady)N.longCue();
     if(out.opened)showBlink(out.dur);
     N.setGaze(out.pt,out.zone);
     /* 화면을 보고 있지 않은 채로(얼굴을 놓침, 화면 밖을 봄, 눈을 오래 감음) 시간이 지나면 쉽니다. */

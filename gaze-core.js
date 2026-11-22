@@ -322,7 +322,7 @@
   Tracker.prototype.reset=function(){
     this.fx.reset();this.fy.reset();this.hold.reset();this.blink.reset();
     this.lastPt=null;this.lastZone=null;this.lastRaw=null;this.jump=false;
-    this.lostSince=null;this.settleUntil=0;this.halfSince=null;
+    this.lostSince=null;this.settleUntil=0;this.halfSince=null;this.longCued=false;
   };
   /* 감김 점수에서, 눈을 뜨고 있어도 나오는 만큼(c0, 아래를 볼 때 큽니다)을 뺍니다. */
   Tracker.prototype.closedOf=function(m){
@@ -332,10 +332,11 @@
   /* m: measure() 결과 또는 null. t: ms.
      돌려주는 값 {pt:{x,y}|null, zone, blink, long, alarm, closed, why, opened, dur}
      opened: 방금 눈을 떴음. 그때 dur 은 감고 있던 시간(ms)
+     longReady: 감고 있는 시간이 방금 길게 깜빡임 길이를 넘었음(감는 동안 한 번). 이제 떠도 된다고 소리로 알릴 때 씁니다
      long: 깜빡임보다 길게(maxMs 초과, longMs 이하) 감았다 떴음
      pt가 null이면 입력을 멈춰야 합니다. why: face 얼굴 놓침, closed 눈 감음, model 보정 없음, away 화면 밖 */
   Tracker.prototype.step=function(m,t){
-    var out={pt:null,zone:null,blink:false,long:false,alarm:false,closed:false,why:"",opened:false,dur:0};
+    var out={pt:null,zone:null,blink:false,long:false,alarm:false,closed:false,why:"",opened:false,dur:0,longReady:false};
     if(!m){
       if(this.lostSince===null)this.lostSince=t;
       if(t-this.lostSince>1000){var keep=this.lostSince;this.reset();this.lostSince=keep;}
@@ -344,6 +345,8 @@
     this.lostSince=null;
     var c=this.closedOf(m),b=this.blink.update(c,t);
     out.blink=b.blink;out.alarm=b.alarm;out.closed=b.closed;
+    if(!b.closed)this.longCued=false;
+    else if(!this.longCued&&b.dur>this.blink.maxMs){this.longCued=true;out.longReady=true;}
     if(b.opened){
       out.opened=true;out.dur=b.dur;
       this.settleUntil=t+this.settleMs;

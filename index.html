@@ -422,6 +422,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-v="mouse" aria-pressed="true">마우스</button>
       <button type="button" data-v="camera" aria-pressed="false">카메라</button>
     </div>
+    <p>카메라 입력 중에도 화면의 칸을 손으로 누르면 바로 그 칸이 골라집니다. 눈으로 쓰다가 보호자가 거들 때 씁니다.</p>
     <p>카메라는 얼굴을 보고 시선과 깜빡임을 읽습니다. 영상은 이 기기 안에서만 쓰고, 어디에도 보내거나 저장하지 않습니다.</p>
   </div>
   <div class="field" data-input="camera">
@@ -699,7 +700,7 @@ function compose(list){
   window.addEventListener("pointermove",setRaw);
   stage.addEventListener("pointerleave",function(){if(S.input==="mouse"&&S.nav!=="joy")raw=null});
   /* 마우스나 스페이스바를 0.6초 넘게 눌렀다 떼면 길게 깜빡임을 대신합니다 */
-  var downAt=0;
+  var downAt=0,downCued=false;   /* 누르기 시작한 때, 길게 누름 소리를 냈는지 */
   window.addEventListener("pointerdown",function(e){
     if(S.input!=="mouse"||dlg.open)return;
     if(S.nav==="joy"?!!e.target.closest("button,input,a,dialog"):!stage.contains(e.target))return;
@@ -861,6 +862,8 @@ function compose(list){
   /* 지우기 칸을 보면서 눈을 길게 감았다 뜨면 한 글자(낱자가 아니라 글자 하나)를 통째로 지웁니다. */
   var lastLong=0;           /* 지우기 칸에서 길게 깜빡인 때 */
   var LONG_GAP=4000;        /* 이 안에 한 번 더 길게 깜빡이면 전체 지우기 */
+  /* 감고(누르고) 있는 시간이 길게 깜빡임 길이를 넘었을 때: 이제 떠도 길게 깜빡임으로 읽힌다고 소리로 알립니다 */
+  function longCue(){if(!dlg.open&&!locked)tick(523,0.12);}
   function longBlink(){
     if(morseOn()){morseInput("-");return;}
     if(S.nav==="count"){if(!dlg.open&&!locked)countLong();return;}
@@ -1079,9 +1082,10 @@ function compose(list){
     var c=mBuf;mBuf="";
     morseDo(c);
   }
-  function morseDo(code){
+  /* tap: 손으로 칸을 눌러 넣었음(깜빡임 간격과 상관없으므로 자동 조정에 넣지 않습니다) */
+  function morseDo(code,tap){
     var a=morseMap()[code],text=compose(list);
-    autoGap(!!a);
+    if(!tap)autoGap(!!a);
     if(!a||(a.need&&!text)){tick(220,0.25);morseRender();return;}
     if(a.ch){
       /* 모음을 이어서 넣으면 합칩니다(3*3 모드와 같습니다): ㅗ ㅏ 는 ㅘ, ㅜ ㅓ 는 ㅝ */
@@ -1127,7 +1131,7 @@ function compose(list){
   function morseRender(){
     var box=$("morse"),text=compose(list);
     function key(big,label,c,off,tag,id){
-      return '<'+(tag||"div")+(id?' id="'+id+'" type="button"':"")+' class="mk'+(c&&c===mBuf?" is-on":"")+(off?" is-off":"")+'">'+
+      return '<'+(tag||"div")+(id?' id="'+id+'" type="button"':"")+' class="mk'+(c&&c===mBuf?" is-on":"")+(off?" is-off":"")+'"'+(c?' data-c="'+c+'"':"")+'>'+
         (big?'<span class="mk__ch">'+esc(big)+'</span>':"")+(label?'<span class="mk__lb">'+esc(label)+'</span>':"")+morseCode(c)+'</'+(tag||"div")+'>';
     }
     function grp(list2,cols,rows,html){
@@ -1164,6 +1168,22 @@ function compose(list){
     showScreen();
   });
   $("morse").addEventListener("click",function(e){if(e.target.closest("#mzSet"))$("openSet").click();});
+  /* 카메라 입력 중에도 손으로 칸을 누르면 바로 그 칸이 들어갑니다(보호자가 거들거나, 손을 쓸 수 있을 때).
+     마우스 입력은 누르는 것이 깜빡임을 대신하므로 여기서 다루지 않습니다.
+     자세 점검이나 보정 화면이 자판을 덮고 있으면 칸이 눌리지 않습니다. */
+  stage.addEventListener("click",function(e){
+    if(S.input!=="camera"||locked||dlg.open)return;
+    if(morseOn()){
+      var mk=e.target.closest(".mk[data-c]");
+      if(mk){mBuf="";morseDo(mk.dataset.c,true);}
+      return;
+    }
+    var t=e.target.closest(".tile");
+    if(!t)return;
+    firstBlink=0;dwellT=0;armed=false;
+    /* 조이스틱은 판이 밀려 있어도 눌린 칸 그대로 고릅니다 */
+    act(+t.dataset.z);
+  });
 
   var last=performance.now();
   function frame(now){
@@ -1174,6 +1194,9 @@ function compose(list){
       else{jit.x=0;jit.y=0;}
       g={x:raw.x+jit.x,y:raw.y+jit.y};
     }
+    /* 마우스나 스페이스바를 0.6초 넘게 누르고 있으면 길게 깜빡임이 읽혔다고 알립니다 */
+    if(!downAt)downCued=false;
+    else if(!downCued&&S.input==="mouse"&&now-downAt>=600){downCued=true;longCue();}
     if(mAway&&view===null){mAway=false;showScreen();}   /* 리모컨에서 나가면 모스픽 모드로 돌아옵니다 */
     var mz=morseOn(),cm=!mz&&S.nav==="count";
     if(mz){g=null;morseStep(now);}     /* 모스픽 모드와 깜빡임 횟수 방식은 어디를 보는지 쓰지 않습니다 */
@@ -1358,6 +1381,7 @@ function compose(list){
     setInput:setInput,notice:notice,
     render:function(){render()},
     nav:function(){return S.nav},
+    longCue:function(){if(S.input==="camera")longCue()},
     /* 지금 어디를 보는지 쓰지 않는 방식인지(깜빡임 횟수 방식, 모스픽 모드). 카메라는 이때 가운데 한 점만 봅니다 */
     noGaze:function(){return morseOn()||S.nav==="count"},
     setNav:function(v){var b=document.querySelector('#navSeg [data-v="'+v+'"]');if(b)b.click();},speak:speak,tick:tick,alarm:alarm,

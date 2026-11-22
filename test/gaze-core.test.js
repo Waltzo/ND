@@ -445,6 +445,22 @@ test("눈 깜빡임 민감도: 3 은 예전 문턱, 민감할수록 덜 감아�
   }
   assert.strictEqual(blinks(3),0);assert.strictEqual(blinks(5),1);
 });
+test("길게 감고 있으면 길게 깜빡임 길이를 넘는 순간 한 번 알린다",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  look(tr,5,500,t);t.log=[];
+  look(tr,5,600,t,{closed:0.95});
+  assert.strictEqual(t.log.filter(function(o){return o.longReady}).length,0,"짧게 감은 동안에는 알리지 않습니다");
+  look(tr,5,300,t);t.log=[];
+  var t0=t.v;
+  look(tr,5,1800,t,{closed:0.95});
+  var hit=t.log.filter(function(o){return o.longReady});
+  assert.strictEqual(hit.length,1,"감는 동안 한 번만");
+  var at=t.log.indexOf(hit[0])*33;
+  assert.ok(at>=1000&&at<=1150,"1초(길게 깜빡임 경계)를 막 넘었을 때: "+at);
+  look(tr,5,300,t);t.log=[];
+  look(tr,5,1500,t,{closed:0.95});
+  assert.strictEqual(t.log.filter(function(o){return o.longReady}).length,1,"다음에 감을 때 다시 알립니다");
+});
 test("눈을 뜰 때 감고 있던 시간을 알려 준다",function(){
   var tr=tracker(),t={v:0,log:[]};
   look(tr,5,500,t);t.log=[];
