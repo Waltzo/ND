@@ -69,8 +69,9 @@ button,input{font:inherit;color:inherit}
 .mz__grp{display:grid;gap:6px;padding:6px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-height:0;grid-auto-rows:1fr}
 .mk{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;min-width:0;min-height:0;overflow:hidden;padding:2px}
 /* 글자는 위에, 모스부호는 그 아래에 놓아 서로 겹치지 않게 합니다 */
-.mk__ch{position:relative;font-size:clamp(18px,4.6vh,44px);font-weight:700;line-height:1}
-.mk__lb{position:relative;font-size:clamp(11px,2vh,16px);font-weight:600;line-height:1.15;text-align:center;word-break:keep-all}
+/* 모스픽 모드의 글자는 모두 35px 입니다(칸의 글자, 칸 이름, 단어, 쓴 문장) */
+.mk__ch{position:relative;font-size:35px;font-weight:700;line-height:1}
+.mk__lb{position:relative;font-size:35px;font-weight:600;line-height:1.1;text-align:center;word-break:keep-all}
 .mk__code{position:relative;display:flex;gap:3px;align-items:center;min-height:9px}
 .mk__code i{display:block;width:9px;height:9px;border-radius:5px;background:var(--ink)}
 .mk__code i.d{width:24px}
@@ -83,7 +84,7 @@ button.mk{cursor:pointer}
 .mz__buf .mk__code i{width:13px;height:13px;border-radius:7px}
 .mz__buf .mk__code i.d{width:34px}
 .mz__text:empty::before{content:"여기를 짧게 누르면 점, 길게 누르면 선";color:var(--muted);font-size:14px}
-.mz__text{cursor:pointer;flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:clamp(18px,4vh,34px);line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
+.mz__text{cursor:pointer;flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:35px;line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
 .top__btns{display:flex;gap:8px}
 /* 설정: 양 끝에 말이 붙은 조절 막대(둔감 ― 민감), 깜빡임 시간 구분 띠, 켜고 끄는 스위치 */
 .ends{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
@@ -386,7 +387,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <p>위쪽 머리줄의 단추로 3*3 모드와 모스픽 모드를 오갑니다. 모스픽 모드에서는 짧은 깜빡임이 점, 긴 깜빡임이 선입니다. 칸에 그려진 대로 깜빡인 뒤 입력 대기 시간(설정 &gt; 눈 깜빡임 민감도) 동안 더 깜빡이지 않으면 그 칸이 들어갑니다. 어느 칸을 보는지는 쓰지 않습니다.</p>
     <p>카메라로 쓸 때는 얼굴과 시선이 화면을 향하고 있을 때의 깜빡임만 받습니다. 눈을 뜬 채 3초 동안 화면을 보지 않으면 쉬기로 들어가고, 화면을 4초 동안 보면 다시 시작합니다.</p>
     <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자). ㅐ 는 ㅏ ㅣ, ㅔ 는 ㅓ ㅣ, ㅘ 는 ㅗ ㅏ 처럼 모음을 이어 넣으면 합쳐집니다. 리모컨 칸(점 넷, 선 하나)을 넣으면 왼쪽이 리모컨 칸들로 바뀝니다. 같은 코드를 한 번 더 넣으면 글자 화면으로 돌아옵니다. 리모컨 화면에서는 리모컨 칸과 호출만 듣고, 코드가 칸 하나로 정해지면 기다리지 않고 바로 보냅니다. 리모컨 기기는 설정 &gt; 리모컨에서 고릅니다(음소거와 2개씩은 모스픽 리모컨에 없습니다).</p>
-    <p>칸을 손이나 마우스로 누르면 그 칸이 바로 들어갑니다. 오른쪽 아래 쓴 문장 칸은 모스부호를 넣는 단추로, 짧게 누르면 점, 0.6초 넘게 눌렀다 떼면 선입니다. 마우스 입력에서는 스페이스바로도 넣을 수 있습니다.</p>
+    <p>칸을 손이나 마우스로 누르면 그 칸이 바로 들어갑니다. 자주 쓰는 단어 화면에서는 코드를 넣으면 그 단어가 문장에 들어가며 바로 읽어 주고, 단어 칸을 손으로 누르면 그 단어를 고칩니다. 오른쪽 아래 쓴 문장 칸은 모스부호를 넣는 단추로, 짧게 누르면 점, 0.6초 넘게 눌렀다 떼면 선입니다. 마우스 입력에서는 스페이스바로도 넣을 수 있습니다.</p>
   </div>
   </section>
 
@@ -1050,10 +1051,11 @@ function compose(list){
             ["ㅠ","-..."],["ㅖ",".--."],["ㅒ","..--"]]];
   var M_B=[[["ㅏ","-."],["ㅓ","--."],["ㅗ","---"],["ㅜ",".--"],["ㅡ","-.-"],["ㅣ","-.."]],
            [["1","-..-"],["2","-.-."],["3","--.."],["4","-."],["5","-.."],["6","-.-"],["7","--."],["8","---"],["9",".--"],["0","....."]]];
-  /* 기능 칸. need: 쓴 글이 있어야 쓸 수 있는 칸(없으면 흐리게). 설정은 코드 없이 손으로 누릅니다 */
-  var M_FN=[{k:"remote",lb:"리모컨",c:"....-"},{k:"words",lb:"자주 쓰는 단어",c:"-...."},{k:"set",lb:"설정",c:""},
-            {k:"speak",lb:"말하기",c:"..",need:true},{k:"bell",lb:"호출",c:"--"},{k:"clear",lb:"전체 지우기",c:"..-..",need:true}];
-  var M_FN2=[{k:"page",lb:"화면 넘기기",c:"-"},{k:"back",lb:"지우기",c:".",need:true},{k:"space",lb:"띄어쓰기",c:".-",need:true}];
+  /* 기능 칸. 글자가 35px 이라 이름은 세 글자 안으로 줄여 씁니다(단어: 자주 쓰는 단어, 비우기: 전체 지우기,
+     넘기기: 글자 화면 넘기기, 띄우기: 띄어쓰기). need: 쓴 글이 있어야 쓸 수 있는 칸(없으면 흐리게). 설정은 코드 없이 손으로 누릅니다 */
+  var M_FN=[{k:"remote",lb:"리모컨",c:"....-"},{k:"words",lb:"단어",c:"-...."},{k:"set",lb:"설정",c:""},
+            {k:"speak",lb:"말하기",c:"..",need:true},{k:"bell",lb:"호출",c:"--"},{k:"clear",lb:"비우기",c:"..-..",need:true}];
+  var M_FN2=[{k:"page",lb:"넘기기",c:"-"},{k:"back",lb:"지우기",c:".",need:true},{k:"space",lb:"띄우기",c:".-",need:true}];
   /* 리모컨 화면: 3칸씩 5줄. [칸 이름, 코드, 리모컨(remote.js)의 칸 이름]. 나가기는 리모컨의 나가기 버튼이고,
      글자 화면으로는 리모컨 칸 코드를 한 번 더 넣어 돌아갑니다.
      글자 화면과 따로 열리므로 글자 코드와 겹쳐도 됩니다. 이 화면에서는 리모컨 칸과 호출, 리모컨 칸(글자 화면으로 돌아가기)만 듣습니다. */
@@ -1069,10 +1071,18 @@ function compose(list){
   /* 길고 짧음을 가려야 하는 방식인지(마우스는 뗄 때 넣습니다) */
   function onRelease(){return morseOn()||S.nav==="count"}
   /* 자주 쓰는 단어 화면: 단어 8개에 숫자 1~8 의 코드를 붙입니다 */
+  /* [단어, 코드, 몇 번째 단어인지]. 비어 있는 단어도 자리는 둡니다(눌러서 채울 수 있게) */
   function morseWords(){
-    var out=[];
-    WORDS.forEach(function(w,i){if(w)out.push([w,M_B[1][i][1]])});
-    return out;
+    return WORDS.map(function(w,i){return [w,M_B[1][i][1],i]});
+  }
+  /* 단어 칸을 손으로 누르면 그 단어를 고칩니다(설정 > 자주 쓰는 단어와 같은 것을 고칩니다) */
+  function editWord(i){
+    var v=window.prompt("자주 쓰는 단어 "+(i+1)+" 고치기 (20자까지, 비우면 이 칸을 쓰지 않습니다)",WORDS[i]||"");
+    if(v===null)return;
+    WORDS[i]=v.trim().slice(0,20);
+    try{localStorage.setItem("nundam-words",JSON.stringify(WORDS));}catch(err){}
+    var el=$("w"+i);if(el)el.value=WORDS[i];
+    render();
   }
   /* 지금 화면에서 코드가 뜻하는 것 {코드: {ch} | {word} | 기능 칸} */
   function morseMap(){
@@ -1082,7 +1092,7 @@ function compose(list){
       M_FN.concat(M_FN2).forEach(function(f){if(f.c&&fnInRemote(f))m[f.c]=f});
       return m;
     }
-    if(mPage==="W")morseWords().forEach(function(a){m[a[1]]={word:a[0]}});
+    if(mPage==="W")morseWords().forEach(function(a){if(a[0])m[a[1]]={word:a[0]}});
     else M_A[mPage].concat(M_B[mPage]).forEach(function(a){m[a[1]]={ch:a[0]}});
     M_FN.concat(M_FN2).forEach(function(f){if(f.c)m[f.c]=f});
     return m;
@@ -1122,6 +1132,7 @@ function compose(list){
       if(list.length&&list[list.length-1]!==" ")list.push(" ");
       Array.prototype.push.apply(list,a.word.split(""));list.push(" ");
       mPage=0;
+      speak(a.word);                                       /* 고른 단어를 바로 읽어 줍니다 */
     }
     else if(a.k==="page")mPage=mPage===0?1:0;              /* 단어 화면에서는 글자 첫 화면으로 */
     else if(a.k==="words")mPage="W";
@@ -1137,7 +1148,7 @@ function compose(list){
     else if(a.r!=null){
       /* 리모컨 칸: 스위치봇으로 보내고 이 화면에 머뭅니다 */
       var R=window.NundamRemote,slot=null;
-      if(R)R.all().forEach(function(x){if(x.label===a.r)slot=x});
+      if(R&&R.all)R.all().forEach(function(x){if(x.label===a.r)slot=x});
       if(slot)R.send(slot.i);
     }
     tick(880,0.12);
@@ -1163,8 +1174,8 @@ function compose(list){
   }
   function morseRender(){
     var box=$("morse"),text=compose(list);
-    function key(big,label,c,off,tag,id){
-      return '<'+(tag||"div")+(id?' id="'+id+'" type="button"':"")+' class="mk'+(c&&c===mBuf?" is-on":"")+(off?" is-off":"")+'"'+(c?' data-c="'+c+'"':"")+'>'+
+    function key(big,label,c,off,tag,id,more){
+      return '<'+(tag||"div")+(id?' id="'+id+'" type="button"':"")+' class="mk'+(c&&c===mBuf?" is-on":"")+(off?" is-off":"")+'"'+(c?' data-c="'+c+'"':"")+(more||"")+'>'+
         (big?'<span class="mk__ch">'+esc(big)+'</span>':"")+(label?'<span class="mk__lb">'+esc(label)+'</span>':"")+morseCode(c)+'</'+(tag||"div")+'>';
     }
     function grp(list2,cols,rows,html){
@@ -1181,11 +1192,12 @@ function compose(list){
     if(mPage==="R"){
       /* 리모컨 기기를 아직 고르지 않았으면 흐리게 */
       var R=window.NundamRemote,ok={};
-      if(R)R.all().forEach(function(x){ok[x.label]=x.ready});
+      if(R&&R.all)R.all().forEach(function(x){ok[x.label]=x.ready});
       left=grp(M_R,3,5,M_R.map(function(x){return key("",x[0],x[1],!ok[x[2]])}).join(""));
     }else if(mPage==="W"){
       var w=morseWords();
-      left=grp(w,2,4,w.map(function(x){return key("",x[0],x[1])}).join(""));
+      /* 3칸씩. 손으로 누르면 고치기(data-w), 코드를 넣으면 문장에 넣고 읽어 줍니다 */
+      left=grp(w,3,3,w.map(function(x){return key("",x[0]||"(빈칸)",x[1],!x[0],"","",' data-w="'+x[2]+'"')}).join(""));
     }else{
       var a=M_A[mPage],b=M_B[mPage];
       left=grp(a,4,Math.ceil(a.length/4),chars(a))+grp(b,4,Math.ceil(b.length/4),chars(b));
@@ -1218,6 +1230,8 @@ function compose(list){
   stage.addEventListener("click",function(e){
     if(locked||dlg.open)return;
     if(morseOn()){
+      var wk=e.target.closest(".mk[data-w]");
+      if(wk){mBuf="";editWord(+wk.dataset.w);return;}
       var mk=e.target.closest(".mk[data-c]");
       if(mk){mBuf="";morseDo(mk.dataset.c,true);}
       return;
@@ -1452,8 +1466,27 @@ function compose(list){
   showMode();showNav();showScreen();render();layout();requestAnimationFrame(frame);
 })();
 </script>
-<script src="remote.js"></script>
-<script src="gaze-core.js"></script>
-<script src="gaze.js"></script>
+<script>
+/* 나머지 스크립트는 지금 올라가 있는 판의 커밋 번호를 주소에 붙여 부릅니다.
+   브라우저가 예전 remote.js 나 gaze.js 를 저장해 두었다가 새 index.html 과 섞어 쓰는 일을 막습니다.
+   (섞이면 새 화면이 예전 파일에 없는 기능을 불러 화면이 넘어가지 않습니다.)
+   version.txt 를 못 읽으면(내 컴퓨터에서 바로 열었을 때) 그냥 부릅니다. 순서는 지켜야 합니다. */
+(function(){
+  var files=["remote.js","gaze-core.js","gaze.js"];
+  function load(v){
+    files.forEach(function(f){
+      var el=document.createElement("script");
+      el.src=f+(v?"?v="+v:"");el.async=false;
+      document.body.appendChild(el);
+    });
+  }
+  try{
+    fetch("version.txt",{cache:"no-cache"}).then(function(r){return r.ok?r.text():""}).then(function(t){
+      t=String(t).trim();
+      load(/^[0-9a-f]{7,40}$/.test(t)?t.slice(0,7):"");
+    },function(){load("");});
+  }catch(err){load("");}
+})();
+</script>
 </body>
 </html>
