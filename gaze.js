@@ -255,6 +255,7 @@
   function stop(){
     runId++;mode="off";clearTimeout(resultT);alarmDet.reset();
     release();screen(null);chip.hidden=true;diag.hidden=true;
+    eyeShown=null;N.eyes(null);
     N.setGaze(null);N.lock(false);
   }
   function fail(msg){
@@ -402,7 +403,15 @@
       N.notice("눈을 오래 감고 있어 호출음을 울렸습니다.",5000);
     }
   }
+  /* 머리줄의 눈 인식 표시. 얼굴을 잠깐 놓친 것으로 깜빡거리지 않게, 0.5초 넘게 못 읽어야 "안 됨"으로 바꿉니다 */
+  var eyeAt=0,eyeShown=null;
+  function showEyes(m,now){
+    if(m)eyeAt=now;
+    var on=!!m||now-eyeAt<500;
+    if(on!==eyeShown){eyeShown=on;N.eyes(on);}
+  }
   function onFrame(m,now){
+    showEyes(m,now);
     frameC=m?(m.closed==null?ear.update(m.open):m.closed):0;   /* 원래 감김 점수 */
     watchEyes(m,now);
     showDiag(m);

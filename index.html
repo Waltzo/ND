@@ -85,7 +85,12 @@ button.mk{cursor:pointer}
 .mz__buf .mk__code i.d{width:34px}
 .mz__text:empty::before{content:"여기를 짧게 누르면 점, 길게 누르면 선";color:var(--muted);font-size:14px}
 .mz__text{cursor:pointer;flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:35px;line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
-.top__btns{display:flex;gap:8px}
+.top__btns{display:flex;gap:8px;align-items:center}
+/* 머리줄의 눈 인식 표시(카메라 입력일 때만) */
+.eye{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;white-space:nowrap;color:var(--c-speak)}
+.eye::before{content:"";width:10px;height:10px;border-radius:50%;background:currentColor}
+.eye.is-on{color:var(--c-func)}
+.eye[hidden]{display:none}
 /* 설정: 양 끝에 말이 붙은 조절 막대(둔감 ― 민감), 깜빡임 시간 구분 띠, 켜고 끄는 스위치 */
 .ends{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
 .ends input{flex:1;min-width:0}
@@ -254,6 +259,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 <header class="top">
   <span class="top__name">눈담<small id="ver" title="지금 올라가 있는 판(커밋 번호)"></small></span>
   <span class="top__btns">
+    <span class="eye" id="eyeState" role="status" hidden></span>
+    <button class="btn" id="inputBtn" type="button" title="입력 방식 바꾸기 (마우스, 카메라)">입력: 마우스</button>
     <button class="btn" id="modeBtn" type="button" title="화면 모드 바꾸기">3*3 모드</button>
     <button class="btn" id="openSet" type="button" aria-haspopup="dialog">설정</button>
   </span>
@@ -1438,9 +1445,16 @@ function compose(list){
   function setInput(v,why){
     S.input=v;raw=null;camZone=null;locked=false;firstBlink=0;dwellT=0;
     Array.prototype.forEach.call($("inputSeg").children,function(x){x.setAttribute("aria-pressed",x.dataset.v===v)});
+    $("inputBtn").textContent="입력: "+(v==="camera"?"카메라":"마우스");
+    if(v!=="camera")$("eyeState").hidden=true;
     Array.prototype.forEach.call(document.querySelectorAll("[data-input]"),function(el){el.hidden=el.dataset.input!==v});
     if(why)notice(why);
   }
+  /* 머리줄의 단추: 지금 입력 방식을 보여 주고, 누르면 다른 방식으로 바꿉니다(설정의 입력 방식과 같은 것) */
+  $("inputBtn").addEventListener("click",function(){
+    var b=$("inputSeg").querySelector('[data-v="'+(S.input==="camera"?"mouse":"camera")+'"]');
+    if(b)b.click();
+  });
   $("inputSeg").addEventListener("click",function(e){
     var b=e.target.closest("button");if(!b||b.dataset.v===S.input)return;
     var G=window.NundamGaze;
@@ -1464,6 +1478,13 @@ function compose(list){
     setInput:setInput,notice:notice,
     render:function(){render()},
     nav:function(){return S.nav},
+    /* 머리줄의 눈 인식 표시. on: true 인식 중, false 인식 안 됨, null 표시하지 않음(카메라를 쓰지 않을 때) */
+    eyes:function(on){
+      var el=$("eyeState");
+      el.hidden=on==null||S.input!=="camera";
+      el.classList.toggle("is-on",!!on);
+      el.textContent=on?"눈 인식 중":"눈 인식 안 됨";
+    },
     longCue:function(){if(S.input==="camera")longCue()},
     /* 지금 어디를 보는지 쓰지 않는 방식인지(깜빡임 횟수 방식, 모스픽 모드). 카메라는 이때 가운데 한 점만 봅니다 */
     noGaze:function(){return morseOn()||S.nav==="count"},
