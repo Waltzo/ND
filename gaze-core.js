@@ -265,6 +265,12 @@
 
   /* ---------- 깜빡임 ---------- */
 
+  /* 눈 깜빡임 민감도 1(둔감)~5(민감)를 감김 문턱으로. 3 이 예전 값(0.5, 0.35)입니다.
+     민감할수록 눈을 덜 감아도 감은 것으로 봅니다. */
+  function blinkSense(level){
+    var k=clamp(level,1,5)-1;
+    return {on:Math.round((0.65-0.075*k)*1000)/1000,off:Math.round((0.45-0.05*k)*1000)/1000};
+  }
   /* 감김 정도(0~1)가 on을 넘었다가 off 아래로 돌아오면 한 번.
      감고 있던 시간이 minMs~maxMs 안일 때만 의도한 깜빡임으로 봅니다.
      alarmMs 이상 감고 있으면 한 번 alarm을 알립니다(0이면 끔). */
@@ -324,11 +330,12 @@
     return clamp((c-c0)/(1-c0),0,1);
   };
   /* m: measure() 결과 또는 null. t: ms.
-     돌려주는 값 {pt:{x,y}|null, zone, blink, long, alarm, closed, why}
+     돌려주는 값 {pt:{x,y}|null, zone, blink, long, alarm, closed, why, opened, dur}
+     opened: 방금 눈을 떴음. 그때 dur 은 감고 있던 시간(ms)
      long: 깜빡임보다 길게(maxMs 초과, longMs 이하) 감았다 떴음
      pt가 null이면 입력을 멈춰야 합니다. why: face 얼굴 놓침, closed 눈 감음, model 보정 없음, away 화면 밖 */
   Tracker.prototype.step=function(m,t){
-    var out={pt:null,zone:null,blink:false,long:false,alarm:false,closed:false,why:""};
+    var out={pt:null,zone:null,blink:false,long:false,alarm:false,closed:false,why:"",opened:false,dur:0};
     if(!m){
       if(this.lostSince===null)this.lostSince=t;
       if(t-this.lostSince>1000){var keep=this.lostSince;this.reset();this.lostSince=keep;}
@@ -338,6 +345,7 @@
     var c=this.closedOf(m),b=this.blink.update(c,t);
     out.blink=b.blink;out.alarm=b.alarm;out.closed=b.closed;
     if(b.opened){
+      out.opened=true;out.dur=b.dur;
       this.settleUntil=t+this.settleMs;
       /* longAnywhere: 깜빡임 횟수 방식처럼 어느 칸을 보는지가 필요 없을 때는 시선 자리가 없어도 읽습니다 */
       out.long=b.dur>this.blink.maxMs&&b.dur<=this.longMs&&(!!this.longAnywhere||!!this.lastPt);
@@ -560,7 +568,7 @@
     measure:measure,anglesOf:anglesOf,EarCloser:EarCloser,
     featureVec:featureVec,headShift:headShift,HEAD_K:HEAD_K,ridgeFit:ridgeFit,predict:predict,biasFix:biasFix,
     OneEuro:OneEuro,zoneOf:zoneOf,zoneSticky:zoneSticky,sense:sense,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
-    BlinkDetector:BlinkDetector,Tracker:Tracker,
+    BlinkDetector:BlinkDetector,blinkSense:blinkSense,Tracker:Tracker,
     Collector:Collector,HoldGate:HoldGate,
     FACE_PX:FACE_PX,searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
     postureCheck:postureCheck,quality:quality,needsLowRate:needsLowRate,FpsMeter:FpsMeter,

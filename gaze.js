@@ -53,7 +53,7 @@
 
   /* 보호자 설정(깜빡임, 호출음). 이 기기에 저장합니다. */
   var SETKEY="nundam-gaze-set";
-  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3,sense:3,diag:false};   /* sense: 시선 민감도 1(민감)~5(둔감) */
+  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3,sense:3,blinkSense:3,diag:false};   /* sense: 시선 민감도 1(민감)~5(둔감), blinkSense: 눈 깜빡임 민감도 1(둔감)~5(민감) */
   try{
     var savedOpt=JSON.parse(localStorage.getItem(SETKEY));
     if(savedOpt)for(var ok in opt)if(typeof savedOpt[ok]===typeof opt[ok])opt[ok]=savedOpt[ok];
@@ -65,6 +65,9 @@
   function applyOpt(){
     if(opt.blinkMax<opt.blinkMin+0.1)opt.blinkMax=opt.blinkMin+0.1;
     alarmDet.alarmMs=opt.alarm*1000;
+    var bs=C.blinkSense(opt.blinkSense);
+    alarmDet.on=bs.on;alarmDet.off=bs.off;
+    if(tracker){tracker.blink.on=bs.on;tracker.blink.off=bs.off;}
     if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;tracker.longMs=longMs();tracker.setSense(C.sense(opt.sense));}
   }
 
@@ -608,6 +611,7 @@
     runCount=countNav();
     tracker=new C.Tracker({model:runCount?null:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
     tracker.setSense(C.sense(opt.sense));
+    applyOpt();
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
   }
@@ -641,6 +645,7 @@
     tracker.longAnywhere=true;
     var out=tracker.step(m,now);
     lastOut=out;
+    if(out.opened)showBlink(out.dur);
     N.setGaze(null);
     /* 얼굴을 놓침, 한쪽 눈만 보임, 눈이 화면 밖을 향함, 눈을 오래 감음 */
     var on=!out.closed&&C.facing(m,ref);
@@ -669,6 +674,7 @@
     tracker.away=N.nav()==="joy"?1.5:0.3;
     var out=tracker.step(m,now);
     lastOut=out;
+    if(out.opened)showBlink(out.dur);
     N.setGaze(out.pt,out.zone);
     /* 화면을 보고 있지 않은 채로(얼굴을 놓침, 화면 밖을 봄, 눈을 오래 감음) 시간이 지나면 쉽니다. */
     if(out.pt)awaySince=null;
@@ -711,18 +717,35 @@
     diagChk.addEventListener("change",function(){opt.diag=diagChk.checked;saveOpt();if(!opt.diag)diag.hidden=true;});
   }
 
+  /* 설정의 "깜빡임 시간 구분": 무시, 점(짧은 깜빡임), 선(긴 깜빡임) 구간을 띠로 그리고, 마지막 깜빡임이 어디에 들어갔는지 보여 줍니다 */
+  var lastBlinkMs=null;
+  function drawBlinkBar(){
+    var bar=document.getElementById("blinkBar");
+    if(!bar)return;
+    var span=Math.max(1,opt.blinkMax*2),a=opt.blinkMin/span*100,b=opt.blinkMax/span*100;   /* 띠 전체가 나타내는 시간(초) */
+    bar.style.setProperty("--a",a+"%");bar.style.setProperty("--b",b+"%");
+    var mark=document.getElementById("blinkMark"),txt=document.getElementById("blinkLast"),leg=document.getElementById("blinkLegend");
+    if(leg)leg.textContent="무시 < "+opt.blinkMin.toFixed(2)+"초  ·  점 "+opt.blinkMin.toFixed(2)+"~"+opt.blinkMax.toFixed(2)+"초  ·  선 > "+opt.blinkMax.toFixed(2)+"초 ("+(longMs()/1000).toFixed(1)+"초까지)";
+    if(lastBlinkMs===null){if(mark)mark.hidden=true;if(txt)txt.textContent="아직 없음";return;}
+    var sec=lastBlinkMs/1000,kind=sec<opt.blinkMin?"ig":(sec<=opt.blinkMax?"dot":(lastBlinkMs<=longMs()?"dash":"ig"));
+    if(mark){mark.hidden=false;mark.style.left=Math.min(100,sec/span*100)+"%";mark.dataset.k=kind;}
+    if(txt)txt.textContent=sec.toFixed(2)+"초 · "+({ig:"무시",dot:"점",dash:"선"})[kind];
+  }
+  function showBlink(ms){lastBlinkMs=ms;drawBlinkBar();}
+
   /* 설정 창의 조절 막대 */
   function slider(id,key,fmt){
     var el=document.getElementById(id),out=document.getElementById(id+"Out");
     if(!el)return;
-    function show(){el.value=opt[key];if(out)out.textContent=fmt(opt[key]);}
+    function show(){el.value=opt[key];if(out)out.textContent=fmt(opt[key]);drawBlinkBar();}
     el.addEventListener("input",function(){opt[key]=parseFloat(el.value);applyOpt();saveOpt();sliders.forEach(function(f){f()});});
     sliders.push(show);show();
   }
   var sliders=[];
   slider("gazeSense","sense",function(v){return ["","민감","조금 민감","보통","조금 둔감","둔감"][v]||""});
+  slider("blinkSense","blinkSense",function(v){return ["","둔감","조금 둔감","보통","조금 민감","민감"][v]||""});
   slider("blinkMin","blinkMin",function(v){return v.toFixed(2)+"초"});
-  slider("blinkMax","blinkMax",function(v){return v.toFixed(1)+"초"});
+  slider("blinkMax","blinkMax",function(v){return v.toFixed(2)+"초"});
   slider("eyeAlarm","alarm",function(v){return v?v+"초":"끔"});
   applyOpt();
 

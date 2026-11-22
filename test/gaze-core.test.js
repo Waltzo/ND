@@ -433,6 +433,26 @@ test("가운데 한 점 기준으로 화면을 향하는지 가린다",function(
   assert.strictEqual(G.facing(turned,ref),false,"머리를 40도 돌렸을 때");
   assert.ok(Math.abs(G.gazeOff(meas({gx:0.5,gy:0.5}),ref).x)<1);
 });
+test("눈 깜빡임 민감도: 3 은 예전 문턱, 민감할수록 덜 감아도 감은 것으로 본다",function(){
+  assert.deepStrictEqual(G.blinkSense(3),{on:0.5,off:0.35});
+  var a=G.blinkSense(1),b=G.blinkSense(5);
+  assert.ok(a.on>0.5&&b.on<0.5&&a.off<a.on&&b.off<b.on&&b.off>0);
+  /* 반쯤(0.42) 감는 깜빡임: 보통에서는 못 읽고 민감에서는 읽습니다 */
+  function blinks(level){
+    var s=G.blinkSense(level),d=new G.BlinkDetector({on:s.on,off:s.off,minMs:100,maxMs:1000}),n=0,t=0;
+    [0,0.42,0.42,0.42,0.42,0.42,0,0].forEach(function(c){t+=60;if(d.update(c,t).blink)n++;});
+    return n;
+  }
+  assert.strictEqual(blinks(3),0);assert.strictEqual(blinks(5),1);
+});
+test("눈을 뜰 때 감고 있던 시간을 알려 준다",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  look(tr,5,500,t);t.log=[];
+  look(tr,5,400,t,{closed:0.95});look(tr,5,300,t);
+  var op=t.log.filter(function(o){return o.opened});
+  assert.strictEqual(op.length,1);
+  assert.ok(op[0].dur>=330&&op[0].dur<=470,"감은 시간 "+op[0].dur);
+});
 test("깜빡임 횟수 방식에서는 시선 자리가 없어도 길게 깜빡임을 읽는다",function(){
   var tr=tracker(),t={v:0,log:[]};
   tr.model=null;                     /* 보정이 없어 시선 자리를 모르는 상태 */

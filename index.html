@@ -68,13 +68,13 @@ button,input{font:inherit;color:inherit}
 .mz__col{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
 .mz__grp{display:grid;gap:6px;padding:6px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-height:0;grid-auto-rows:1fr}
 .mk{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;min-width:0;min-height:0;overflow:hidden;padding:2px}
-.mk__ch{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,7vh,64px);font-weight:700;line-height:1;color:var(--muted);opacity:.3}
+/* 글자는 위에, 모스부호는 그 아래에 놓아 서로 겹치지 않게 합니다 */
+.mk__ch{position:relative;font-size:clamp(18px,4.6vh,44px);font-weight:700;line-height:1}
 .mk__lb{position:relative;font-size:clamp(11px,2vh,16px);font-weight:600;line-height:1.15;text-align:center;word-break:keep-all}
 .mk__code{position:relative;display:flex;gap:3px;align-items:center;min-height:9px}
 .mk__code i{display:block;width:9px;height:9px;border-radius:5px;background:var(--ink)}
 .mk__code i.d{width:24px}
 .mk.is-on{background:var(--ink);border-color:var(--ink);color:var(--surface)}
-.mk.is-on .mk__ch{color:var(--surface)}
 .mk.is-on .mk__code i{background:var(--surface)}
 .mk.is-off{opacity:.38}
 button.mk{cursor:pointer}
@@ -84,6 +84,29 @@ button.mk{cursor:pointer}
 .mz__buf .mk__code i.d{width:34px}
 .mz__text{flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:clamp(18px,4vh,34px);line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
 .top__btns{display:flex;gap:8px}
+/* 설정: 양 끝에 말이 붙은 조절 막대(둔감 ― 민감), 깜빡임 시간 구분 띠, 켜고 끄는 스위치 */
+.ends{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.ends input{flex:1;min-width:0}
+.ends>span{flex:none;min-width:2.6em}
+.ends>span:last-child{text-align:right}
+.bbar{--a:10%;--b:50%;position:relative;height:28px;border-radius:7px;overflow:hidden;
+  background:linear-gradient(to right,color-mix(in srgb,var(--c-speak) 30%,var(--surface)) 0 var(--a),color-mix(in srgb,var(--accent) 28%,var(--surface)) var(--a) var(--b),color-mix(in srgb,var(--muted) 22%,var(--surface)) var(--b) 100%)}
+.bbar span{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap}
+.bbar__ig{left:0;width:var(--a);color:var(--c-speak)}
+.bbar__dot{left:var(--a);width:calc(var(--b) - var(--a))}
+.bbar__dash{left:var(--b);right:0}
+.bbar__mark{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
+.bbar__mark[data-k="ig"]{background:var(--c-speak)}
+.bbar__mark[data-k="dash"]{background:var(--ink)}
+.bbar__mark[hidden]{display:none}
+.blast{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)}
+.blast b{font-family:ui-monospace,monospace;font-size:13px;color:var(--accent)}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:500}
+.switch small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px}
+.switch input{flex:none;width:44px;height:24px;appearance:none;-webkit-appearance:none;border-radius:12px;background:var(--line);position:relative;cursor:pointer;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(20px)}
 /* 깜빡임 횟수 방식: 칸마다 번호를 보여 줍니다. 길게 깜빡여 입력을 켜면 자판 테두리와 칸이 밝아지고,
    지금 와 있는 칸은 주황 테두리(is-first)로 보입니다 */
 .stage.is-count.is-armed{box-shadow:inset 0 0 0 4px var(--signal)}
@@ -140,12 +163,12 @@ button.mk{cursor:pointer}
 .stage.is-joy .tile.is-snap{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal)}
 
 /* 조절 패널 */
-/* 보호자 설정: 오른쪽에서 열리는 창 */
-.panel{position:fixed;inset:0 0 0 auto;margin:0;width:min(380px,100%);height:100%;max-height:100%;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink);padding:16px;overflow:auto;flex-direction:column;gap:16px}
+/* 보호자 설정: 화면 전체를 덮는 창. 넓은 화면에서는 내용을 가운데 760px 폭으로 모읍니다(--px: 양옆 여백) */
+.panel{--px:max(16px,calc((100vw - 760px)/2));position:fixed;inset:0;margin:0;width:100%;max-width:100%;height:100%;max-height:100%;border:0;background:var(--surface);color:var(--ink);padding:16px var(--px);overflow:auto;flex-direction:column;gap:16px}
 .panel[open]{display:flex}
 .panel::backdrop{background:rgba(10,20,26,.45)}
-/* 머리줄은 내용을 내려도 위에 붙어 있습니다. 창의 안쪽 여백(16px)까지 덮도록 바깥으로 넓힙니다 */
-.panel__head{display:flex;align-items:center;gap:12px;flex:none;position:sticky;top:0;z-index:2;margin:-16px -16px 0;padding:16px 16px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+/* 머리줄은 내용을 내려도 위에 붙어 있습니다. 창의 안쪽 여백까지 덮도록 바깥으로 넓힙니다 */
+.panel__head{display:flex;align-items:center;gap:12px;flex:none;position:sticky;top:0;z-index:2;margin:-16px calc(-1*var(--px)) 0;padding:16px var(--px) 12px;background:var(--surface);border-bottom:1px solid var(--line)}
 .panel__head h1{flex:1;min-width:0}
 /* 설정은 처음 화면(단추 목록)과 묶음별 화면으로 나뉩니다 */
 .page{display:flex;flex-direction:column;gap:16px}
@@ -268,7 +291,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-go="voice"><b>목소리</b><span>목소리, 빠르기, 높이, 크기</span></button>
       <button type="button" data-go="screen"><b>화면</b><span>화면 꺼짐 방지</span></button>
       <button type="button" data-go="pick"><b>고르기와 확인</b><span>9칸 직접, 조이스틱, 깜빡임 횟수, 응시</span></button>
-      <button type="button" data-go="camera"><b>입력과 카메라</b><span>마우스, 카메라, 보정, 깜빡임, 호출음</span></button>
+      <button type="button" data-go="camera"><b>입력과 카메라</b><span>마우스, 카메라, 보정, 호출음</span></button>
+      <button type="button" data-go="blink"><b>눈 깜빡임 민감도</b><span>민감도, 깜빡임 시간 구분, 입력 대기 시간</span></button>
       <button type="button" data-go="remote"><b>리모컨</b><span>스위치봇 기기와 리모컨 칸</span></button>
       <button type="button" data-go="words"><b>자주 쓰는 단어</b><span>단어 8개</span></button>
       <button type="button" data-go="etc"><b>시험과 규칙</b><span>마우스 시험, 입력 규칙</span></button>
@@ -358,10 +382,35 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   </div>
   <h2>모스픽 모드</h2>
   <div class="field">
-    <label class="field__top" for="mgap"><span>코드가 끝난 것으로 치는 시간</span><output id="mgapOut">1.5초</output></label>
-    <input type="range" id="mgap" min="0.8" max="3" step="0.1" value="1.5">
-    <p>위쪽 머리줄의 단추로 3*3 모드와 모스픽 모드를 오갑니다. 모스픽 모드에서는 짧은 깜빡임이 점, 긴 깜빡임이 선입니다. 칸에 그려진 대로 깜빡인 뒤 이 시간 동안 더 깜빡이지 않으면 그 칸이 들어갑니다. 어디를 보고 있는지는 쓰지 않습니다.</p>
-    <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅔ ㅐ, 숫자). 마우스로는 0.6초 넘게 눌렀다 떼는 것이 선, 짧게 누르는 것이 점입니다.</p>
+    <p>위쪽 머리줄의 단추로 3*3 모드와 모스픽 모드를 오갑니다. 모스픽 모드에서는 짧은 깜빡임이 점, 긴 깜빡임이 선입니다. 칸에 그려진 대로 깜빡인 뒤 입력 대기 시간(설정 &gt; 눈 깜빡임 민감도) 동안 더 깜빡이지 않으면 그 칸이 들어갑니다. 어디를 보고 있는지는 쓰지 않습니다.</p>
+    <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자). ㅐ 는 ㅏ ㅣ, ㅔ 는 ㅓ ㅣ, ㅘ 는 ㅗ ㅏ 처럼 모음을 이어 넣으면 합쳐집니다. 마우스로는 0.6초 넘게 눌렀다 떼는 것이 선, 짧게 누르는 것이 점입니다.</p>
+  </div>
+  </section>
+
+  <section class="page" data-page="blink" data-title="눈 깜빡임 민감도" hidden>
+  <h2>눈 깜빡임 민감도</h2>
+  <div class="field">
+    <div class="field__top"><span>눈 깜빡임 민감도</span><output id="blinkSenseOut">보통</output></div>
+    <div class="ends"><span>둔감</span><input type="range" id="blinkSense" min="1" max="5" step="1" value="3" aria-label="눈 깜빡임 민감도"><span>민감</span></div>
+    <p>깜빡여도 잘 읽히지 않으면 민감 쪽으로, 깜빡이지 않았는데 읽히면 둔감 쪽으로 옮기세요. 민감할수록 눈을 덜 감아도 감은 것으로 봅니다.</p>
+  </div>
+  <h2>깜빡임 시간 구분</h2>
+  <div class="field">
+    <div class="bbar" id="blinkBar"><span class="bbar__ig">무시</span><span class="bbar__dot">점</span><span class="bbar__dash">선</span><i class="bbar__mark" id="blinkMark" hidden></i></div>
+    <div class="blast"><span>마지막 깜빡임</span><b id="blinkLast">아직 없음</b></div>
+    <div class="field__top"><span>무시</span><output id="blinkMinOut">0.20초</output></div>
+    <input type="range" id="blinkMin" min="0.05" max="0.6" step="0.01" value="0.2" aria-label="이보다 짧은 깜빡임은 무시">
+    <div class="field__top"><span>점 / 선</span><output id="blinkMaxOut">1.00초</output></div>
+    <input type="range" id="blinkMax" min="0.3" max="2" step="0.01" value="1" aria-label="이보다 긴 깜빡임은 선">
+    <p id="blinkLegend"></p>
+    <p>무시보다 짧게 감은 것은 저절로 나온 깜빡임으로 보고 넘어갑니다. 점은 짧은 깜빡임, 선은 긴 깜빡임입니다. 카메라 입력을 켜고 깜빡이면 방금 깜빡임이 띠의 어디에 들어갔는지 보입니다. 마우스 입력은 0.6초가 점과 선의 경계입니다.</p>
+  </div>
+  <h2>입력 대기 시간</h2>
+  <div class="field">
+    <div class="field__top"><span>입력 대기 시간</span><output id="mgapOut">1.5초</output></div>
+    <div class="ends"><span>빠름</span><input type="range" id="mgap" min="0.8" max="4" step="0.1" value="1.5" aria-label="입력 대기 시간"><span>느림</span></div>
+    <p>모스픽 모드에서 깜빡임을 멈춘 뒤 이 시간이 지나면 넣은 점과 선을 한 칸으로 칩니다.</p>
+    <label class="switch" for="autoGap"><span>사용 패턴 자동 조정<small>깜빡임 간격을 분석해 입력 대기 시간을 자동으로 맞춥니다</small></span><input type="checkbox" id="autoGap"></label>
   </div>
   </section>
 
@@ -390,16 +439,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <input type="range" id="gazeSense" min="1" max="5" step="1" value="3">
     <p>눈이 조금만 움직여도 칸이 바뀌면 둔감 쪽으로 옮기세요. 둔감할수록 옆 칸으로 더 확실히 넘어가서 조금 더 머물러야 칸이 바뀌고, 시선 점도 덜 흔들립니다. 대신 칸을 옮기는 반응은 조금 늦어집니다.</p>
   </div>
-  <h2 data-input="camera">깜빡임과 호출음</h2>
-  <div class="field" data-input="camera">
-    <label class="field__top" for="blinkMin"><span>깜빡임으로 치는 가장 짧은 시간</span><output id="blinkMinOut">0.20초</output></label>
-    <input type="range" id="blinkMin" min="0.1" max="0.6" step="0.05" value="0.2">
-  </div>
-  <div class="field" data-input="camera">
-    <label class="field__top" for="blinkMax"><span>깜빡임으로 치는 가장 긴 시간</span><output id="blinkMaxOut">1.0초</output></label>
-    <input type="range" id="blinkMax" min="0.5" max="2" step="0.1" value="1">
-    <p>이보다 짧게 감으면 저절로 나온 깜빡임으로, 길게 감으면 쉬는 것으로 보고 넘어갑니다. 다만 지우기 칸에서는 이보다 길게(2.5초까지) 감았다 뜨면 글자 하나를, 4초 안에 한 번 더 그렇게 하면 전체를 지웁니다.</p>
-  </div>
+  <h2 data-input="camera">호출음</h2>
   <div class="field" data-input="camera">
     <label class="field__top" for="eyeAlarm"><span>눈을 오래 감으면 호출음</span><output id="eyeAlarmOut">3초</output></label>
     <input type="range" id="eyeAlarm" min="0" max="10" step="1" value="3">
@@ -524,7 +564,7 @@ function compose(list){
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
-  var S={pick:"double",gap:1.5,cdbl:0.8,cback:6,mgap:1.5,screen:"grid",dwell:1.0,noise:0,showGaze:true,sound:true,input:"mouse",nav:"direct",back:4};
+  var S={pick:"double",gap:1.5,cdbl:0.8,cback:6,mgap:1.5,auto:false,screen:"grid",dwell:1.0,noise:0,showGaze:true,sound:true,input:"mouse",nav:"direct",back:4};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, "R": 리모컨, "R:묶음": 리모컨 묶음, 4 6 7 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
@@ -549,8 +589,9 @@ function compose(list){
   var cntN=0,cntAt=0;      /* 지금 와 있는 칸 번호(0: 아직 없음), 마지막으로 깜빡인(또는 켠) 때 */
   var cntPair=0,cntFrom=0; /* 두 번 깜빡임의 첫 번째가 될 수 있는 깜빡임의 때, 그 깜빡임 전에 있던 칸 */
   /* 모스픽 모드(S.screen==="morse"): 짧은 깜빡임은 점, 긴 깜빡임은 선. 칸에 그려진 코드를 넣고 잠깐 쉬면 그 칸이 들어갑니다 */
-  var mPage=0;             /* 0: 글자 첫 화면, 1: 둘째 화면(쌍자음, 이중모음, 숫자), "W": 자주 쓰는 단어 */
+  var mPage=0;             /* 0: 글자 첫 화면, 1: 둘째 화면(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자), "W": 자주 쓰는 단어 */
   var mBuf="",mAt=0;       /* 지금까지 넣은 점(.)과 선(-), 마지막으로 넣은 때 */
+  var mIv=[];              /* 한 코드 안에서 깜빡임 사이 간격(초). 사용 패턴 자동 조정에 씁니다 */
   var mAway=false;         /* 모스픽 모드에서 리모컨을 열어 3*3 화면에 가 있는 동안 */
   var camZone=null,locked=false;   /* 카메라가 알려 준 칸, 자세 점검과 보정 중 입력 잠금 */
 
@@ -996,7 +1037,7 @@ function compose(list){
   var M_A=[[["ㄱ","..-"],["ㄴ","..-."],["ㄷ",".-."],["ㄹ","...-"],["ㅁ","..--"],["ㅂ",".-.-"],["ㅅ","...."],["ㅇ","..."],
             ["ㅈ",".-.."],["ㅊ",".--."],["ㅋ","-..-"],["ㅌ","-.-."],["ㅍ","--.."],["ㅎ","-..."]],
            [["ㄲ","..-"],["ㄸ",".-."],["ㅃ",".-.-"],["ㅆ","...."],["ㅉ",".-.."],["ㅑ","..."],["ㅕ","...-"],["ㅛ","..-."],
-            ["ㅠ","-..."],["ㅔ",".--."],["ㅐ","..--"]]];
+            ["ㅠ","-..."],["ㅖ",".--."],["ㅒ","..--"]]];
   var M_B=[[["ㅏ","-."],["ㅓ","--."],["ㅗ","---"],["ㅜ",".--"],["ㅡ","-.-"],["ㅣ","-.."]],
            [["1","-..-"],["2","-.-."],["3","--.."],["4","-."],["5","-.."],["6","-.-"],["7","--."],["8","---"],["9",".--"],["0","....."]]];
   /* 기능 칸. need: 쓴 글이 있어야 쓸 수 있는 칸(없으면 흐리게). 설정은 코드 없이 손으로 누릅니다 */
@@ -1023,7 +1064,9 @@ function compose(list){
   }
   function morseInput(sym){
     if(dlg.open||locked)return;
-    mBuf+=sym;mAt=performance.now();
+    var t=performance.now();
+    if(mBuf){mIv.push((t-mAt)/1000);if(mIv.length>12)mIv.shift();}
+    mBuf+=sym;mAt=t;
     if(mBuf.length>M_MAX){mBuf="";tick(220,0.25);}       /* 그런 코드는 없음 */
     else tick(sym==="."?660:440,sym==="."?0.05:0.15);
     morseRender();
@@ -1038,6 +1081,7 @@ function compose(list){
   }
   function morseDo(code){
     var a=morseMap()[code],text=compose(list);
+    autoGap(!!a);
     if(!a||(a.need&&!text)){tick(220,0.25);morseRender();return;}
     if(a.ch){
       /* 모음을 이어서 넣으면 합칩니다(3*3 모드와 같습니다): ㅗ ㅏ 는 ㅘ, ㅜ ㅓ 는 ㅝ */
@@ -1062,6 +1106,21 @@ function compose(list){
     tick(880,0.12);
     render();
   }
+  /* 사용 패턴 자동 조정: 한 코드 안에서 깜빡임 사이가 보통 얼마나 뜨는지 보고 입력 대기 시간을 그 두 배쯤으로 맞춥니다.
+     간격은 대기 시간보다 짧을 때만 잡히므로(길면 코드가 끊깁니다) 그대로 두면 줄어드는 쪽으로만 치우칩니다.
+     그래서 없는 코드가 들어오면(중간에 끊겼을 수 있음) 조금 늘립니다. ok: 방금 코드가 표에 있었는지 */
+  function setGap(v){
+    S.mgap=Math.round(Math.max(0.8,Math.min(4,v))*10)/10;
+    $("mgap").value=S.mgap;$("mgapOut").textContent=S.mgap.toFixed(1)+"초";
+  }
+  function autoGap(ok){
+    if(!S.auto)return;
+    if(!ok){setGap(S.mgap+0.2);return;}
+    if(mIv.length<6)return;
+    var a=mIv.slice().sort(function(x,y){return x-y}),med=a[a.length>>1];
+    setGap(S.mgap+0.3*(med*2-S.mgap));
+  }
+  $("autoGap").addEventListener("change",function(){S.auto=this.checked;mIv=[];});
   function morseCode(c){
     return '<span class="mk__code">'+c.split("").map(function(x){return x==="-"?'<i class="d"></i>':'<i></i>'}).join("")+'</span>';
   }
