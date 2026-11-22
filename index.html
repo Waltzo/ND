@@ -82,7 +82,8 @@ button.mk{cursor:pointer}
 .mz__buf .mk__code{gap:5px}
 .mz__buf .mk__code i{width:13px;height:13px;border-radius:7px}
 .mz__buf .mk__code i.d{width:34px}
-.mz__text{flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:clamp(18px,4vh,34px);line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
+.mz__text:empty::before{content:"여기를 짧게 누르면 점, 길게 누르면 선";color:var(--muted);font-size:14px}
+.mz__text{cursor:pointer;flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:clamp(18px,4vh,34px);line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
 .top__btns{display:flex;gap:8px}
 /* 설정: 양 끝에 말이 붙은 조절 막대(둔감 ― 민감), 깜빡임 시간 구분 띠, 켜고 끄는 스위치 */
 .ends{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
@@ -250,7 +251,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 <body>
 
 <header class="top">
-  <span class="top__name">눈담<small>묶음 자판 시안</small></span>
+  <span class="top__name">눈담<small id="ver" title="지금 올라가 있는 판(커밋 번호)"></small></span>
   <span class="top__btns">
     <button class="btn" id="modeBtn" type="button" title="화면 모드 바꾸기">3*3 모드</button>
     <button class="btn" id="openSet" type="button" aria-haspopup="dialog">설정</button>
@@ -293,7 +294,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <button type="button" data-go="pick"><b>고르기와 확인</b><span>9칸 직접, 조이스틱, 깜빡임 횟수, 응시</span></button>
       <button type="button" data-go="camera"><b>입력과 카메라</b><span>마우스, 카메라, 보정, 호출음</span></button>
       <button type="button" data-go="blink"><b>눈 깜빡임 민감도</b><span>민감도, 깜빡임 시간 구분, 입력 대기 시간</span></button>
-      <button type="button" data-go="remote"><b>리모컨</b><span>스위치봇 기기와 리모컨 칸</span></button>
+      <button type="button" data-go="remote"><b>리모컨</b><span>스위치봇 중계와 리모컨 기기</span></button>
       <button type="button" data-go="words"><b>자주 쓰는 단어</b><span>단어 8개</span></button>
       <button type="button" data-go="etc"><b>시험과 규칙</b><span>마우스 시험, 입력 규칙</span></button>
     </div>
@@ -383,7 +384,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <h2>모스픽 모드</h2>
   <div class="field">
     <p>위쪽 머리줄의 단추로 3*3 모드와 모스픽 모드를 오갑니다. 모스픽 모드에서는 짧은 깜빡임이 점, 긴 깜빡임이 선입니다. 칸에 그려진 대로 깜빡인 뒤 입력 대기 시간(설정 &gt; 눈 깜빡임 민감도) 동안 더 깜빡이지 않으면 그 칸이 들어갑니다. 어디를 보고 있는지는 쓰지 않습니다.</p>
-    <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자). ㅐ 는 ㅏ ㅣ, ㅔ 는 ㅓ ㅣ, ㅘ 는 ㅗ ㅏ 처럼 모음을 이어 넣으면 합쳐집니다. 마우스로는 0.6초 넘게 눌렀다 떼는 것이 선, 짧게 누르는 것이 점입니다.</p>
+    <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자). ㅐ 는 ㅏ ㅣ, ㅔ 는 ㅓ ㅣ, ㅘ 는 ㅗ ㅏ 처럼 모음을 이어 넣으면 합쳐집니다. 리모컨 칸(점 넷, 선 하나)을 넣으면 왼쪽이 리모컨 칸들로 바뀝니다. 같은 코드를 한 번 더 넣으면 글자 화면으로 돌아옵니다. 리모컨 화면에서는 리모컨 칸과 호출만 듣고, 코드가 칸 하나로 정해지면 기다리지 않고 바로 보냅니다. 리모컨 기기는 설정 &gt; 리모컨에서 고릅니다(음소거와 2개씩은 모스픽 리모컨에 없습니다).</p>
+    <p>칸을 손이나 마우스로 누르면 그 칸이 바로 들어갑니다. 오른쪽 아래 쓴 문장 칸은 모스부호를 넣는 단추로, 짧게 누르면 점, 0.6초 넘게 눌렀다 떼면 선입니다. 마우스 입력에서는 스페이스바로도 넣을 수 있습니다.</p>
   </div>
   </section>
 
@@ -450,7 +452,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 
   <section class="page" data-page="remote" data-title="리모컨" hidden>
   <h2>리모컨 (스위치봇)</h2>
-  <p>리모컨 칸을 확인하면 리모컨 화면이 열립니다. 가운데가 선택, 그 위아래와 양옆이 방향이고, 모서리에는 채널 및 볼륨 묶음, OTT 묶음, 나가기, 이전(리모컨의 뒤로 버튼)이 있습니다. 채널 및 볼륨 묶음에는 볼륨과 채널 위아래, 음소거, 편성표, OTT 묶음에는 넷플릭스와 디즈니 플러스가 있습니다. 자리는 정해져 있고 아래에서 칸마다 기기와 동작만 정합니다. 스위치봇 허브에 등록한 TV, 에어컨 같은 기기와 장면을 조작합니다. 누른 뒤에도 그 화면에 머물러서 음량처럼 여러 번 누를 수 있고, 나가기를 확인해야 나갑니다. OTT 묶음만은 고르면 바로 리모컨 화면으로 돌아갑니다.</p>
+  <p>스위치봇 허브에 등록한 리모컨 하나를 조작합니다. 3*3 모드에서는 리모컨 칸을 확인하면 방향과 선택, 이전, 채널 및 볼륨 묶음, OTT 묶음이 열리고, 모스픽 모드에서는 리모컨 칸 코드로 리모컨 화면을 엽니다.</p>
+  <p>칸마다 보내는 것은 정해져 있습니다. 볼륨과 채널은 스위치봇의 기본 명령으로, 나머지는 스위치봇 앱에서 그 리모컨에 추가해 학습시킨 버튼으로 보냅니다. 앱의 버튼 이름은 아래 "칸마다 보내는 것"에 적힌 그대로여야 합니다.</p>
   <div class="field">
     <label class="field__top" for="rbUrl"><span>중계 주소</span></label>
     <input type="text" id="rbUrl" placeholder="https://이름.계정.workers.dev" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
@@ -461,7 +464,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <p>스위치봇은 웹 페이지에서 바로 부를 수 없어 중계가 하나 필요합니다. 만드는 방법은 worker/switchbot-relay.js 파일 맨 위에 적혀 있습니다. 주소와 암호는 이 기기에만 저장합니다.</p>
   </div>
   <div class="row"><button class="btn" id="rbLoad" type="button">기기 불러오기</button></div>
-  <p id="rbNote" role="status">중계 주소와 암호를 넣고 기기를 불러오면 아래에서 칸을 정할 수 있습니다. 기기를 아직 등록하지 않았으면 종류만 골라 칸을 미리 정해 두고, 나중에 불러와 연결할 수 있습니다.</p>
+  <p id="rbNote" role="status">중계 주소와 암호를 넣고 기기를 불러온 뒤 아래에서 쓸 리모컨을 골라 주세요.</p>
   <div id="rbSlots"></div>
   </section>
 
@@ -499,7 +502,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
       <li>리모컨 칸을 확인하면 방향과 선택, 이전, 채널 및 볼륨 묶음, OTT 묶음이 열립니다. 칸을 확인하면 스위치봇으로 그 동작을 보냅니다.</li>
       <li>깜빡임 횟수 방식에서는 길게 감았다 떠서 입력을 켠 뒤, 짧게 한 번 깜빡이면 다음 칸, 빠르게 두 번 깜빡이면 이전 칸으로 가고, 길게 감았다 뜨면 그 칸을 고릅니다. 이 방식에서는 지우기 칸이 늘 낱자 하나를 지웁니다.</li>
-      <li>모스픽 모드에서는 짧은 깜빡임(점)과 긴 깜빡임(선)을 칸에 그려진 대로 이어서 넣습니다. 리모컨 칸은 3*3 모드의 리모컨 화면을 열고, 거기서 나가기를 고르면 모스픽 모드로 돌아옵니다.</li>
+      <li>모스픽 모드에서는 짧은 깜빡임(점)과 긴 깜빡임(선)을 칸에 그려진 대로 이어서 넣습니다. 리모컨 칸은 왼쪽을 리모컨 칸들로 바꾸고, 나가기 코드를 넣으면 글자 화면으로 돌아옵니다.</li>
       <li>묶음 안에서는 가운데가 뒤로입니다. 리모컨 화면에서는 가운데가 선택이라 왼쪽 아래 나가기로 처음 화면에 돌아갑니다. 오른쪽 아래 이전은 TV 화면에서 뒤로 가는 버튼입니다. 리모컨의 묶음 안에서는 가운데 나가기로 리모컨 화면에 돌아갑니다.</li>
       <li>채널 및 볼륨 묶음에서 2개씩을 켜면 볼륨과 채널 위아래를 확인할 때마다 두 번 보냅니다. 묶음을 나가면 꺼집니다.</li>
     </ol>
@@ -590,10 +593,9 @@ function compose(list){
   var cntN=0,cntAt=0;      /* 지금 와 있는 칸 번호(0: 아직 없음), 마지막으로 깜빡인(또는 켠) 때 */
   var cntPair=0,cntFrom=0; /* 두 번 깜빡임의 첫 번째가 될 수 있는 깜빡임의 때, 그 깜빡임 전에 있던 칸 */
   /* 모스픽 모드(S.screen==="morse"): 짧은 깜빡임은 점, 긴 깜빡임은 선. 칸에 그려진 코드를 넣고 잠깐 쉬면 그 칸이 들어갑니다 */
-  var mPage=0;             /* 0: 글자 첫 화면, 1: 둘째 화면(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자), "W": 자주 쓰는 단어 */
+  var mPage=0;             /* 0: 글자 첫 화면, 1: 둘째 화면(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅖ ㅒ, 숫자), "W": 자주 쓰는 단어, "R": 리모컨 */
   var mBuf="",mAt=0;       /* 지금까지 넣은 점(.)과 선(-), 마지막으로 넣은 때 */
   var mIv=[];              /* 한 코드 안에서 깜빡임 사이 간격(초). 사용 패턴 자동 조정에 씁니다 */
-  var mAway=false;         /* 모스픽 모드에서 리모컨을 열어 3*3 화면에 가 있는 동안 */
   var camZone=null,locked=false;   /* 카메라가 알려 준 칸, 자세 점검과 보정 중 입력 잠금 */
 
   function mainMap(){
@@ -702,14 +704,18 @@ function compose(list){
   /* 마우스나 스페이스바를 0.6초 넘게 눌렀다 떼면 길게 깜빡임을 대신합니다 */
   var downAt=0,downCued=false;   /* 누르기 시작한 때, 길게 누름 소리를 냈는지 */
   window.addEventListener("pointerdown",function(e){
-    if(S.input!=="mouse"||dlg.open)return;
+    if(dlg.open)return;
+    /* 모스픽 모드: 칸은 누르면 바로 들어가고(아래 stage 의 click), 쓴 문장 칸이 모스부호를 넣는 단추입니다.
+       짧게 누르면 점, 0.6초 넘게 누르면 선. 카메라 입력 중에도 됩니다. */
+    if(morseOn()){if(e.target.closest("#mzText"))downAt=performance.now();return;}
+    if(S.input!=="mouse")return;
     if(S.nav==="joy"?!!e.target.closest("button,input,a,dialog"):!stage.contains(e.target))return;
     if(e.target.closest("#mzSet"))return;      /* 모스픽 모드의 설정 칸은 누르는 단추 */
     setRaw(e);downAt=performance.now();
     if(!onRelease())blink();      /* 횟수 방식과 모스픽 모드는 길고 짧음을 가려야 해서 뗄 때 넣습니다 */
   });
   window.addEventListener("pointerup",function(){
-    if(S.input==="mouse"&&downAt){
+    if(downAt&&(S.input==="mouse"||morseOn())){
       if(performance.now()-downAt>=600)longBlink();
       else if(onRelease())blink();
     }
@@ -1047,8 +1053,18 @@ function compose(list){
   var M_FN=[{k:"remote",lb:"리모컨",c:"....-"},{k:"words",lb:"자주 쓰는 단어",c:"-...."},{k:"set",lb:"설정",c:""},
             {k:"speak",lb:"말하기",c:"..",need:true},{k:"bell",lb:"호출",c:"--"},{k:"clear",lb:"전체 지우기",c:"..-..",need:true}];
   var M_FN2=[{k:"page",lb:"화면 넘기기",c:"-"},{k:"back",lb:"지우기",c:".",need:true},{k:"space",lb:"띄어쓰기",c:".-",need:true}];
+  /* 리모컨 화면: 3칸씩 5줄. [칸 이름, 코드, 리모컨(remote.js)의 칸 이름]. 나가기는 리모컨의 나가기 버튼이고,
+     글자 화면으로는 리모컨 칸 코드를 한 번 더 넣어 돌아갑니다.
+     글자 화면과 따로 열리므로 글자 코드와 겹쳐도 됩니다. 이 화면에서는 리모컨 칸과 호출, 리모컨 칸(글자 화면으로 돌아가기)만 듣습니다. */
+  var M_R=[["볼륨 +","--.-","볼륨 위로"],["위","-...","위"],["채널 +","-..-","채널 위로"],
+           ["왼쪽",".-..","왼쪽"],["선택","....","선택"],["오른쪽","..-.","오른쪽"],
+           ["볼륨 -","---.","볼륨 아래로"],["아래","...-","아래"],["채널 -","-.-.","채널 아래로"],
+           ["뒤로","---","이전"],["편성표",".--.","편성표"],["나가기","----","나가기"],
+           ["넷플릭스","-..--","넷플릭스"],["디즈니","-..-.","디즈니 플러스"]];
+  /* 리모컨 화면에서도 듣는 기능 칸 */
+  function fnInRemote(f){return f.k==="bell"||f.k==="remote"}   /* 리모컨 칸을 한 번 더 넣으면 글자 화면으로 */
   var M_MAX=5;             /* 가장 긴 코드의 길이 */
-  function morseOn(){return S.screen==="morse"&&!mAway}
+  function morseOn(){return S.screen==="morse"}
   /* 길고 짧음을 가려야 하는 방식인지(마우스는 뗄 때 넣습니다) */
   function onRelease(){return morseOn()||S.nav==="count"}
   /* 자주 쓰는 단어 화면: 단어 8개에 숫자 1~8 의 코드를 붙입니다 */
@@ -1060,6 +1076,11 @@ function compose(list){
   /* 지금 화면에서 코드가 뜻하는 것 {코드: {ch} | {word} | 기능 칸} */
   function morseMap(){
     var m={};
+    if(mPage==="R"){
+      M_R.forEach(function(a){m[a[1]]={r:a[2]}});
+      M_FN.concat(M_FN2).forEach(function(f){if(f.c&&fnInRemote(f))m[f.c]=f});
+      return m;
+    }
     if(mPage==="W")morseWords().forEach(function(a){m[a[1]]={word:a[0]}});
     else M_A[mPage].concat(M_B[mPage]).forEach(function(a){m[a[1]]={ch:a[0]}});
     M_FN.concat(M_FN2).forEach(function(f){if(f.c)m[f.c]=f});
@@ -1072,6 +1093,11 @@ function compose(list){
     mBuf+=sym;mAt=t;
     if(mBuf.length>M_MAX){mBuf="";tick(220,0.25);}       /* 그런 코드는 없음 */
     else tick(sym==="."?660:440,sym==="."?0.05:0.15);
+    /* 리모컨 화면: 넣은 코드가 칸 하나로 정해지면(더 이어질 코드가 없으면) 기다리지 않고 바로 보냅니다 */
+    if(mPage==="R"&&mBuf){
+      var m=morseMap(),c=mBuf;
+      if(m[c]&&!Object.keys(m).some(function(k){return k!==c&&k.indexOf(c)===0})){mBuf="";morseDo(c);return;}
+    }
     morseRender();
   }
   /* 깜빡임을 멈추고 시간이 지나면 넣은 코드를 한 칸으로 칩니다(frame 에서 부릅니다) */
@@ -1106,7 +1132,13 @@ function compose(list){
       var say=text.trim();
       if(say){speak(say);if(past[past.length-1]!==say)past.push(say);}
     }
-    else if(a.k==="remote"){mAway=true;view="R";focus=5;showScreen();tick(880,0.12);return;}
+    else if(a.k==="remote")mPage=mPage==="R"?0:"R";        /* 리모컨 화면을 열고 닫습니다 */
+    else if(a.r!=null){
+      /* 리모컨 칸: 스위치봇으로 보내고 이 화면에 머뭅니다 */
+      var R=window.NundamRemote,slot=null;
+      if(R)R.all().forEach(function(x){if(x.label===a.r)slot=x});
+      if(slot)R.send(slot.i);
+    }
     tick(880,0.12);
     render();
   }
@@ -1138,9 +1170,19 @@ function compose(list){
       return '<div class="mz__grp" style="grid-template-columns:repeat('+cols+',1fr);flex:'+rows+'">'+html+'</div>';
     }
     function chars(a){return a.map(function(x){return key(x[0],"",x[1])}).join("")}
-    function fns(a){return a.map(function(f){return f.k==="set"?key("",f.lb,"",false,"button","mzSet"):key("",f.lb,f.c,!!f.need&&!text)}).join("")}
+    function fns(a){
+      return a.map(function(f){
+        if(f.k==="set")return key("",f.lb,"",false,"button","mzSet");
+        return key("",f.lb,f.c,mPage==="R"?!fnInRemote(f):(!!f.need&&!text));
+      }).join("");
+    }
     var left;
-    if(mPage==="W"){
+    if(mPage==="R"){
+      /* 리모컨 기기를 아직 고르지 않았으면 흐리게 */
+      var R=window.NundamRemote,ok={};
+      if(R)R.all().forEach(function(x){ok[x.label]=x.ready});
+      left=grp(M_R,3,5,M_R.map(function(x){return key("",x[0],x[1],!ok[x[2]])}).join(""));
+    }else if(mPage==="W"){
       var w=morseWords();
       left=grp(w,2,4,w.map(function(x){return key("",x[0],x[1])}).join(""));
     }else{
@@ -1164,26 +1206,40 @@ function compose(list){
   $("modeBtn").addEventListener("click",function(){
     S.screen=S.screen==="morse"?"grid":"morse";
     try{localStorage.setItem("nundam-screen",S.screen);}catch(err){}
-    mAway=false;mPage=0;view=null;dblOn=false;focus=5;placeBoard();
+    mPage=0;view=null;dblOn=false;focus=5;placeBoard();
     showScreen();
   });
   $("morse").addEventListener("click",function(e){if(e.target.closest("#mzSet"))$("openSet").click();});
-  /* 카메라 입력 중에도 손으로 칸을 누르면 바로 그 칸이 들어갑니다(보호자가 거들거나, 손을 쓸 수 있을 때).
-     마우스 입력은 누르는 것이 깜빡임을 대신하므로 여기서 다루지 않습니다.
+  /* 손으로 칸을 누르면 바로 그 칸이 들어갑니다.
+     모스픽 모드: 어느 입력 방식에서든 됩니다(모스부호는 쓴 문장 칸을 눌러 넣습니다).
+     3*3 모드: 카메라 입력 중일 때만(보호자가 거들 때). 마우스 입력은 누르는 것이 깜빡임을 대신합니다.
      자세 점검이나 보정 화면이 자판을 덮고 있으면 칸이 눌리지 않습니다. */
   stage.addEventListener("click",function(e){
-    if(S.input!=="camera"||locked||dlg.open)return;
+    if(locked||dlg.open)return;
     if(morseOn()){
       var mk=e.target.closest(".mk[data-c]");
       if(mk){mBuf="";morseDo(mk.dataset.c,true);}
       return;
     }
+    if(S.input!=="camera")return;
     var t=e.target.closest(".tile");
     if(!t)return;
     firstBlink=0;dwellT=0;armed=false;
     /* 조이스틱은 판이 밀려 있어도 눌린 칸 그대로 고릅니다 */
     act(+t.dataset.z);
   });
+  /* 머리줄에 지금 올라가 있는 판의 커밋 번호를 보여 줍니다. version.txt 는 GitHub Pages 가 올릴 때 채워 줍니다.
+     내 컴퓨터에서 바로 열었을 때는 채워지지 않아 "개발판"으로 보입니다. */
+  (function(){
+    var el=$("ver");
+    el.textContent="개발판";
+    try{
+      fetch("version.txt",{cache:"no-cache"}).then(function(r){return r.ok?r.text():""}).then(function(t){
+        t=String(t).trim();
+        if(/^[0-9a-f]{7,40}$/.test(t))el.textContent=t.slice(0,7);
+      },function(){});
+    }catch(err){}
+  })();
 
   var last=performance.now();
   function frame(now){
@@ -1196,8 +1252,7 @@ function compose(list){
     }
     /* 마우스나 스페이스바를 0.6초 넘게 누르고 있으면 길게 깜빡임이 읽혔다고 알립니다 */
     if(!downAt)downCued=false;
-    else if(!downCued&&S.input==="mouse"&&now-downAt>=600){downCued=true;longCue();}
-    if(mAway&&view===null){mAway=false;showScreen();}   /* 리모컨에서 나가면 모스픽 모드로 돌아옵니다 */
+    else if(!downCued&&(S.input==="mouse"||morseOn())&&now-downAt>=600){downCued=true;longCue();}
     var mz=morseOn(),cm=!mz&&S.nav==="count";
     if(mz){g=null;morseStep(now);}     /* 모스픽 모드와 깜빡임 횟수 방식은 어디를 보는지 쓰지 않습니다 */
     if(cm){g=null;countStep(now);}

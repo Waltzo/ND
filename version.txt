@@ -1,0 +1,3 @@
+---
+---
+{{ site.github.build_revision | slice: 0, 7 }}
