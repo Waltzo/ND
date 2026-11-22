@@ -47,7 +47,7 @@
 
   /* 보호자 설정(깜빡임, 호출음). 이 기기에 저장합니다. */
   var SETKEY="nundam-gaze-set";
-  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3,diag:false};
+  var opt={blinkMin:0.2,blinkMax:1.0,alarm:3,sense:3,diag:false};   /* sense: 시선 민감도 1(민감)~5(둔감) */
   try{
     var savedOpt=JSON.parse(localStorage.getItem(SETKEY));
     if(savedOpt)for(var ok in opt)if(typeof savedOpt[ok]===typeof opt[ok])opt[ok]=savedOpt[ok];
@@ -59,7 +59,7 @@
   function applyOpt(){
     if(opt.blinkMax<opt.blinkMin+0.1)opt.blinkMax=opt.blinkMin+0.1;
     alarmDet.alarmMs=opt.alarm*1000;
-    if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;tracker.longMs=longMs();}
+    if(tracker){tracker.blink.minMs=opt.blinkMin*1000;tracker.blink.maxMs=opt.blinkMax*1000;tracker.longMs=longMs();tracker.setSense(C.sense(opt.sense));}
   }
 
   /* ---------- 화면 ---------- */
@@ -580,6 +580,7 @@
   function enterRun(){
     mode="run";awaySince=null;
     tracker=new C.Tracker({model:model,blink:{minMs:opt.blinkMin*1000,maxMs:opt.blinkMax*1000,alarmMs:0},longMs:longMs()});
+    tracker.setSense(C.sense(opt.sense));
     mover=new C.MoveDetector(base);
     screen(null);N.lock(false);
   }
@@ -664,6 +665,7 @@
     sliders.push(show);show();
   }
   var sliders=[];
+  slider("gazeSense","sense",function(v){return ["","민감","조금 민감","보통","조금 둔감","둔감"][v]||""});
   slider("blinkMin","blinkMin",function(v){return v.toFixed(2)+"초"});
   slider("blinkMax","blinkMax",function(v){return v.toFixed(1)+"초"});
   slider("eyeAlarm","alarm",function(v){return v?v+"초":"끔"});

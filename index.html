@@ -351,6 +351,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <label class="check" data-input="camera" for="diagChk"><input type="checkbox" id="diagChk">진단 표시 (카메라 영상과 측정값)</label>
   <div class="row"><a class="btn" href="debug.html" style="text-align:center;text-decoration:none">카메라 진단 페이지 열기</a></div>
   <p>카메라가 주는 해상도와 줌, 추적하는 눈이 몇 픽셀로 찍히는지를 크게 볼 수 있습니다.</p>
+  <div class="field" data-input="camera">
+    <label class="field__top" for="gazeSense"><span>시선 민감도</span><output id="gazeSenseOut">보통</output></label>
+    <input type="range" id="gazeSense" min="1" max="5" step="1" value="3">
+    <p>눈이 조금만 움직여도 칸이 바뀌면 둔감 쪽으로 옮기세요. 둔감할수록 옆 칸으로 더 확실히 넘어가서 조금 더 머물러야 칸이 바뀌고, 시선 점도 덜 흔들립니다. 대신 칸을 옮기는 반응은 조금 늦어집니다.</p>
+  </div>
   <h2 data-input="camera">깜빡임과 호출음</h2>
   <div class="field" data-input="camera">
     <label class="field__top" for="blinkMin"><span>깜빡임으로 치는 가장 짧은 시간</span><output id="blinkMinOut">0.20초</output></label>

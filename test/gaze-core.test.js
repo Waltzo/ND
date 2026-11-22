@@ -378,6 +378,44 @@ test("길게 감았다 뜨면 길게 깜빡임 한 번, 칸은 감기 직전 그
   t.log=[];look(tr,2,2900,t,{closed:0.95});look(tr,2,400,t);
   assert.strictEqual(t.log.filter(function(o){return o.long}).length,0);
 });
+test("시선 민감도: 1 은 예전 값 그대로, 둔감할수록 여유와 머무는 시간이 늘고 빠른 움직임을 더 거른다",function(){
+  assert.deepStrictEqual(G.sense(1),{margin:0,holdMs:150,beta:0.5});
+  var a=G.sense(3),b=G.sense(5);
+  assert.ok(a.margin>0&&b.margin>a.margin&&b.margin<=0.3);
+  assert.ok(a.holdMs>150&&b.holdMs>a.holdMs);
+  assert.ok(a.beta<0.5&&b.beta<a.beta&&b.beta>0);
+});
+test("지금 칸은 경계를 여유만큼 넘어가야 벗어난다",function(){
+  /* 5번 칸의 오른쪽 경계는 x=2/3. 여유 0.15 면 2/3+0.05 까지는 5번 */
+  assert.strictEqual(G.zoneSticky(0.69,0.5,5,0),6);
+  assert.strictEqual(G.zoneSticky(0.69,0.5,5,0.15),5);
+  assert.strictEqual(G.zoneSticky(0.73,0.5,5,0.15),6);
+  assert.strictEqual(G.zoneSticky(0.69,0.5,null,0.15),6,"지금 칸이 없으면 보는 자리 그대로");
+  assert.strictEqual(G.zoneSticky(0.64,0.5,6,0.15),6,"돌아올 때도 같은 여유");
+});
+test("둔감하게 두면 경계 근처에서 흔들려도 칸이 바뀌지 않는다",function(){
+  function run(level){
+    var tr=tracker(),t={v:0,log:[]},c=G.zoneCenter(5),n=0,last=5;
+    tr.setSense(G.sense(level));
+    look(tr,5,600,t);
+    /* 5번과 6번의 경계(x=2/3) 양쪽으로 0.03 씩, 0.3초마다 오가는 눈 */
+    for(var i=0;i<20;i++){
+      var x=2/3+(i%2?0.03:-0.03),end=t.v+300,out;
+      while(t.v<end){t.v+=33;out=tr.step(meas({gx:x,gy:c.y}),t.v);}
+      if(out.zone!==last){n++;last=out.zone;}
+    }
+    return n;
+  }
+  assert.ok(run(1)>=10,"민감: 경계를 넘을 때마다 바뀝니다 "+run(1));
+  assert.strictEqual(run(3),0,"보통: 바뀌지 않습니다");
+});
+test("둔감하게 두어도 옆 칸 한가운데를 보면 1초 안에 바뀐다",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  tr.setSense(G.sense(5));
+  look(tr,4,600,t);
+  assert.strictEqual(look(tr,5,1000,t).zone,5);
+  assert.strictEqual(look(tr,9,1000,t).zone,9);
+});
 test("깜빡임 횟수 방식에서는 시선 자리가 없어도 길게 깜빡임을 읽는다",function(){
   var tr=tracker(),t={v:0,log:[]};
   tr.model=null;                     /* 보정이 없어 시선 자리를 모르는 상태 */

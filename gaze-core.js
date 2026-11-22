@@ -235,6 +235,22 @@
   }
   function zoneCenter(z){return {x:((z-1)%3+0.5)/3,y:(Math.floor((z-1)/3)+0.5)/3}}
 
+  /* 지금 칸(cur)에 붙들어 두는 칸 고르기: 지금 칸의 테두리를 칸 너비의 margin 배만큼 넘어가야 다른 칸으로 봅니다.
+     경계 근처를 볼 때나 칸 안에서 눈이 조금 흔들릴 때 옆 칸으로 넘어가지 않게 합니다. */
+  function zoneSticky(x,y,cur,margin){
+    if(cur&&margin>0){
+      var c=zoneCenter(cur),half=(0.5+margin)/3;
+      if(Math.abs(x-c.x)<=half&&Math.abs(y-c.y)<=half)return cur;
+    }
+    return zoneOf(x,y);
+  }
+  /* 시선 민감도 1(민감)~5(둔감)를 추적기 값으로. 1 은 예전 그대로입니다.
+     margin: 칸을 벗어난 것으로 치는 여유, holdMs: 새 칸에 머물러야 하는 시간, beta: 빠른 움직임을 덜 거르는 정도 */
+  function sense(level){
+    var k=(clamp(level,1,5)-1)/4;
+    return {margin:0.3*k,holdMs:Math.round(150+350*k),beta:0.5-0.35*k};
+  }
+
   /* 새 칸에 ms 이상 머물러야 칸이 바뀝니다(경계에서 떨리지 않게). */
   function ZoneHold(ms){this.ms=ms;this.reset()}
   ZoneHold.prototype.reset=function(){this.z=null;this.c=null;this.ct=0};
@@ -288,10 +304,15 @@
     this.ear=new EarCloser();
     this.settleMs=o.settleMs==null?120:o.settleMs;
     this.longMs=o.longMs==null?2500:o.longMs;   /* 길게 깜빡임으로 치는 가장 긴 시간 */
+    this.margin=o.margin||0;                    /* 지금 칸을 벗어난 것으로 치는 여유(칸 너비 기준). zoneSticky */
     this.longAnywhere=!!o.longAnywhere;         /* 시선 자리가 없어도 길게 깜빡임을 읽을지 */
     this.away=o.away==null?0.3:o.away;          /* 화면 밖으로 이만큼(화면 크기 기준) 넘게 나가면 입력을 멈춤 */
     this.reset();
   }
+  /* 시선 민감도(sense 의 결과)를 적용합니다 */
+  Tracker.prototype.setSense=function(s){
+    this.margin=s.margin;this.hold.ms=s.holdMs;this.fx.beta=s.beta;this.fy.beta=s.beta;
+  };
   Tracker.prototype.reset=function(){
     this.fx.reset();this.fy.reset();this.hold.reset();this.blink.reset();
     this.lastPt=null;this.lastZone=null;this.lastRaw=null;this.jump=false;
@@ -345,7 +366,7 @@
     var aw=this.away;
     if(x<-aw||x>1+aw||y<-aw||y>1+aw){this.lastPt=null;this.lastZone=null;this.hold.reset();out.why="away";return out;}
     var pt={x:clamp(x,0,1),y:clamp(y,0,1)};
-    this.lastPt=pt;this.lastZone=this.hold.update(zoneOf(pt.x,pt.y),t);
+    this.lastPt=pt;this.lastZone=this.hold.update(zoneSticky(pt.x,pt.y,this.hold.z,this.margin),t);
     out.pt=pt;out.zone=this.lastZone;
     return out;
   };
@@ -516,7 +537,7 @@
     clamp:clamp,median:median,majority:majority,
     measure:measure,anglesOf:anglesOf,EarCloser:EarCloser,
     featureVec:featureVec,headShift:headShift,HEAD_K:HEAD_K,ridgeFit:ridgeFit,predict:predict,biasFix:biasFix,
-    OneEuro:OneEuro,zoneOf:zoneOf,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
+    OneEuro:OneEuro,zoneOf:zoneOf,zoneSticky:zoneSticky,sense:sense,zoneCenter:zoneCenter,ZoneHold:ZoneHold,
     BlinkDetector:BlinkDetector,Tracker:Tracker,
     Collector:Collector,HoldGate:HoldGate,
     FACE_PX:FACE_PX,searchRegions:searchRegions,cropAround:cropAround,plausible:plausible,cropStale:cropStale,tuneCamera:tuneCamera,
