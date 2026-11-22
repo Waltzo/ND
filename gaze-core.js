@@ -288,6 +288,7 @@
     this.ear=new EarCloser();
     this.settleMs=o.settleMs==null?120:o.settleMs;
     this.longMs=o.longMs==null?2500:o.longMs;   /* 길게 깜빡임으로 치는 가장 긴 시간 */
+    this.longAnywhere=!!o.longAnywhere;         /* 시선 자리가 없어도 길게 깜빡임을 읽을지 */
     this.away=o.away==null?0.3:o.away;          /* 화면 밖으로 이만큼(화면 크기 기준) 넘게 나가면 입력을 멈춤 */
     this.reset();
   }
@@ -317,7 +318,8 @@
     out.blink=b.blink;out.alarm=b.alarm;out.closed=b.closed;
     if(b.opened){
       this.settleUntil=t+this.settleMs;
-      out.long=b.dur>this.blink.maxMs&&b.dur<=this.longMs&&!!this.lastPt;
+      /* longAnywhere: 깜빡임 횟수 방식처럼 어느 칸을 보는지가 필요 없을 때는 시선 자리가 없어도 읽습니다 */
+      out.long=b.dur>this.blink.maxMs&&b.dur<=this.longMs&&(!!this.longAnywhere||!!this.lastPt);
     }
     /* 감는 동안, 반쯤 감긴 동안, 막 뜬 직후에는 홍채가 흔들리므로 감기 직전 칸을 유지합니다. */
     /* 길게 깜빡임을 읽으려면 그 시간까지는 감기 직전 칸을 붙들고 있어야 합니다. */

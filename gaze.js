@@ -607,8 +607,10 @@
   }
 
   function stepRun(m,now){
-    /* 조이스틱은 화면 밖을 봐도 그쪽 가장자리에 붙은 것으로 칩니다. */
-    tracker.away=N.nav()==="joy"?1.5:0.3;
+    /* 조이스틱은 화면 밖을 봐도 그쪽 가장자리에 붙은 것으로 칩니다.
+       깜빡임 횟수 방식은 어디를 보는지 쓰지 않으므로, 화면 밖을 봐도 멈추지 않고 길게 깜빡임도 읽습니다. */
+    tracker.away=N.nav()==="direct"?0.3:1.5;
+    tracker.longAnywhere=N.nav()==="count";
     var out=tracker.step(m,now);
     lastOut=out;
     N.setGaze(out.pt,out.zone);

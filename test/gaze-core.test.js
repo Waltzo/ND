@@ -378,6 +378,15 @@ test("길게 감았다 뜨면 길게 깜빡임 한 번, 칸은 감기 직전 그
   t.log=[];look(tr,2,2900,t,{closed:0.95});look(tr,2,400,t);
   assert.strictEqual(t.log.filter(function(o){return o.long}).length,0);
 });
+test("깜빡임 횟수 방식에서는 시선 자리가 없어도 길게 깜빡임을 읽는다",function(){
+  var tr=tracker(),t={v:0,log:[]};
+  tr.model=null;                     /* 보정이 없어 시선 자리를 모르는 상태 */
+  look(tr,2,600,t);look(tr,2,1800,t,{closed:0.95});look(tr,2,400,t);
+  assert.strictEqual(t.log.filter(function(o){return o.long}).length,0,"보통은 읽지 않습니다");
+  tr.longAnywhere=true;t.log=[];
+  look(tr,2,1800,t,{closed:0.95});look(tr,2,400,t);
+  assert.strictEqual(t.log.filter(function(o){return o.long}).length,1);
+});
 test("얼굴을 놓치면 입력을 멈춘다",function(){
   var tr=tracker(),t={v:0};
   look(tr,5,500,t);
