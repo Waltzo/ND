@@ -62,6 +62,28 @@ button,input{font:inherit;color:inherit}
 /* 조이스틱 방식: 판 전체를 밀어 포커스 칸을 가운데에 둡니다. 밀려난 줄은 자판 밖으로 나갑니다. */
 .stage.is-joy .tile{transform:translate(calc(var(--sx,0)*(100% + var(--gap))),calc(var(--sy,0)*(100% + var(--gap))));transition:opacity .12s,transform .22s ease-out}
 .stage.is-joy .tile.is-focus{opacity:1;border-color:var(--ink)}
+/* 모스픽 모드: 자판 영역을 덮는 판. 왼쪽은 글자(큰 묶음, 작은 묶음), 오른쪽은 기능 칸과 넣은 깜빡임, 쓴 문장 */
+.mz{position:absolute;inset:0;z-index:2;background:var(--bg);padding:12px;display:grid;grid-template-columns:1.45fr 1fr;gap:10px;cursor:auto}
+.mz[hidden]{display:none}
+.mz__col{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
+.mz__grp{display:grid;gap:6px;padding:6px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-height:0;grid-auto-rows:1fr}
+.mk{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;min-width:0;min-height:0;overflow:hidden;padding:2px}
+.mk__ch{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,7vh,64px);font-weight:700;line-height:1;color:var(--muted);opacity:.3}
+.mk__lb{position:relative;font-size:clamp(11px,2vh,16px);font-weight:600;line-height:1.15;text-align:center;word-break:keep-all}
+.mk__code{position:relative;display:flex;gap:3px;align-items:center;min-height:9px}
+.mk__code i{display:block;width:9px;height:9px;border-radius:5px;background:var(--ink)}
+.mk__code i.d{width:24px}
+.mk.is-on{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.mk.is-on .mk__ch{color:var(--surface)}
+.mk.is-on .mk__code i{background:var(--surface)}
+.mk.is-off{opacity:.38}
+button.mk{cursor:pointer}
+.mz__buf{flex:none;height:46px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.mz__buf .mk__code{gap:5px}
+.mz__buf .mk__code i{width:13px;height:13px;border-radius:7px}
+.mz__buf .mk__code i.d{width:34px}
+.mz__text{flex:1.3;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;font-size:clamp(18px,4vh,34px);line-height:1.3;text-align:left;white-space:pre-wrap;word-break:break-all}
+.top__btns{display:flex;gap:8px}
 /* 깜빡임 횟수 방식: 칸마다 번호를 보여 줍니다. 길게 깜빡여 입력을 켜면 자판 테두리와 칸이 밝아지고,
    지금 와 있는 칸은 주황 테두리(is-first)로 보입니다 */
 .stage.is-count.is-armed{box-shadow:inset 0 0 0 4px var(--signal)}
@@ -206,7 +228,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 
 <header class="top">
   <span class="top__name">눈담<small>묶음 자판 시안</small></span>
-  <button class="btn" id="openSet" type="button" aria-haspopup="dialog">설정</button>
+  <span class="top__btns">
+    <button class="btn" id="modeBtn" type="button" title="화면 모드 바꾸기">3*3 모드</button>
+    <button class="btn" id="openSet" type="button" aria-haspopup="dialog">설정</button>
+  </span>
 </header>
 
 <div class="notice" id="notice" role="status" hidden></div>
@@ -221,6 +246,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <div class="tile" data-z="7"></div>
   <div class="tile" data-z="8"></div>
   <div class="tile" data-z="9"></div>
+  <div class="mz" id="morse" aria-label="모스픽 모드" hidden></div>
   <div class="gaze" id="gaze" hidden></div>
 </section>
 
@@ -288,7 +314,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     </div>
     <p data-nav="count">칸마다 번호(1~9)가 보입니다. 눈을 길게 한 번 감았다 뜨면 소리가 나고 자판 테두리가 주황색이 되며 입력이 켜집니다. 그 뒤 짧게 한 번 깜빡이면 다음 칸으로(처음에는 1번 칸으로), 빠르게 두 번 깜빡이면 이전 칸으로 갑니다. 주황 테두리가 고를 칸에 오면 눈을 길게 감았다 떠서 고릅니다. 9번 다음은 1번, 1번 이전은 9번입니다. 어디를 보고 있는지는 쓰지 않습니다.</p>
     <p data-nav="count">카메라로 쓸 때는 9점 보정 대신 가운데 점 하나만 봅니다. 두 눈이 화면을 향하지 않은 채로 8초가 지나면 쉬기로 들어가고, 화면을 4초 동안 보면 다시 시작합니다.</p>
-    <p data-nav="count">고른 뒤에도 입력은 켜져 있어 이어서 고를 수 있습니다. 한동안 깜빡이지 않거나, 칸에 테두리가 없을 때 길게 깜빡이면 입력이 꺼집니다. 켜지고 꺼지는 소리는 소리를 꺼 두어도 납니다.</p>
+    <p data-nav="count">고른 뒤에도 입력은 켜져 있고 테두리도 그 칸에 남습니다. 한 번 더 길게 깜빡이면 같은 칸을 다시 고르고, 화면이 바뀌어도 테두리는 같은 자리에 있습니다. 한동안 깜빡이지 않으면 입력이 꺼집니다. 켜지고 꺼지는 소리는 소리를 꺼 두어도 납니다.</p>
     <p data-nav="count">마우스로는 0.6초 넘게 눌렀다 떼는 것이 길게 깜빡임, 짧게 누르는 것이 짧은 깜빡임입니다.</p>
     <p data-nav="joy">눈을 가운데에서 왼쪽(오른쪽, 위, 아래, 대각선)으로 보냈다가 다시 가운데로 돌아오면 그쪽 칸이 가운데로 옵니다. 두 번 깜빡이면 가운데에 온 칸을 고르고 처음 자리로 돌아갑니다. 아무것도 하지 않으면 칸 테두리가 줄어들다가 처음 자리로 돌아갑니다.</p>
     <p data-nav="direct">고를 칸을 직접 보고 확인합니다.</p>
@@ -329,6 +355,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
     <label class="field__top" for="dwell"><span>응시 시간</span><output id="dwellOut">1.0초</output></label>
     <input type="range" id="dwell" min="0.5" max="3" step="0.1" value="1.0">
   </div>
+  </div>
+  <h2>모스픽 모드</h2>
+  <div class="field">
+    <label class="field__top" for="mgap"><span>코드가 끝난 것으로 치는 시간</span><output id="mgapOut">1.5초</output></label>
+    <input type="range" id="mgap" min="0.8" max="3" step="0.1" value="1.5">
+    <p>위쪽 머리줄의 단추로 3*3 모드와 모스픽 모드를 오갑니다. 모스픽 모드에서는 짧은 깜빡임이 점, 긴 깜빡임이 선입니다. 칸에 그려진 대로 깜빡인 뒤 이 시간 동안 더 깜빡이지 않으면 그 칸이 들어갑니다. 어디를 보고 있는지는 쓰지 않습니다.</p>
+    <p>긴 깜빡임 한 번은 글자 화면을 넘깁니다(쌍자음, ㅑ ㅕ ㅛ ㅠ ㅔ ㅐ, 숫자). 마우스로는 0.6초 넘게 눌렀다 떼는 것이 선, 짧게 누르는 것이 점입니다.</p>
   </div>
   </section>
 
@@ -425,6 +458,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <li>숫자는 0에서 시작해 더하고 빼서 맞춘 뒤 입력 칸으로 넣습니다. 0부터 999까지 됩니다.</li>
       <li>리모컨 칸을 확인하면 방향과 선택, 이전, 채널 및 볼륨 묶음, OTT 묶음이 열립니다. 칸을 확인하면 스위치봇으로 그 동작을 보냅니다.</li>
       <li>깜빡임 횟수 방식에서는 길게 감았다 떠서 입력을 켠 뒤, 짧게 한 번 깜빡이면 다음 칸, 빠르게 두 번 깜빡이면 이전 칸으로 가고, 길게 감았다 뜨면 그 칸을 고릅니다. 이 방식에서는 지우기 칸이 늘 낱자 하나를 지웁니다.</li>
+      <li>모스픽 모드에서는 짧은 깜빡임(점)과 긴 깜빡임(선)을 칸에 그려진 대로 이어서 넣습니다. 리모컨 칸은 3*3 모드의 리모컨 화면을 열고, 거기서 나가기를 고르면 모스픽 모드로 돌아옵니다.</li>
       <li>묶음 안에서는 가운데가 뒤로입니다. 리모컨 화면에서는 가운데가 선택이라 왼쪽 아래 나가기로 처음 화면에 돌아갑니다. 오른쪽 아래 이전은 TV 화면에서 뒤로 가는 버튼입니다. 리모컨의 묶음 안에서는 가운데 나가기로 리모컨 화면에 돌아갑니다.</li>
       <li>채널 및 볼륨 묶음에서 2개씩을 켜면 볼륨과 채널 위아래를 확인할 때마다 두 번 보냅니다. 묶음을 나가면 꺼집니다.</li>
     </ol>
@@ -490,7 +524,7 @@ function compose(list){
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
-  var S={pick:"double",gap:1.5,cdbl:0.8,cback:6,dwell:1.0,noise:0,showGaze:true,sound:true,input:"mouse",nav:"direct",back:4};
+  var S={pick:"double",gap:1.5,cdbl:0.8,cback:6,mgap:1.5,screen:"grid",dwell:1.0,noise:0,showGaze:true,sound:true,input:"mouse",nav:"direct",back:4};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, "R": 리모컨, "R:묶음": 리모컨 묶음, 4 6 7 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
@@ -514,6 +548,10 @@ function compose(list){
   var cntOn=false;         /* 입력이 켜져 있는지 */
   var cntN=0,cntAt=0;      /* 지금 와 있는 칸 번호(0: 아직 없음), 마지막으로 깜빡인(또는 켠) 때 */
   var cntPair=0,cntFrom=0; /* 두 번 깜빡임의 첫 번째가 될 수 있는 깜빡임의 때, 그 깜빡임 전에 있던 칸 */
+  /* 모스픽 모드(S.screen==="morse"): 짧은 깜빡임은 점, 긴 깜빡임은 선. 칸에 그려진 코드를 넣고 잠깐 쉬면 그 칸이 들어갑니다 */
+  var mPage=0;             /* 0: 글자 첫 화면, 1: 둘째 화면(쌍자음, 이중모음, 숫자), "W": 자주 쓰는 단어 */
+  var mBuf="",mAt=0;       /* 지금까지 넣은 점(.)과 선(-), 마지막으로 넣은 때 */
+  var mAway=false;         /* 모스픽 모드에서 리모컨을 열어 3*3 화면에 가 있는 동안 */
   var camZone=null,locked=false;   /* 카메라가 알려 준 칸, 자세 점검과 보정 중 입력 잠금 */
 
   function mainMap(){
@@ -602,6 +640,7 @@ function compose(list){
       t.innerHTML=html+'<div class="ring"></div>';
     }
     var now=$("now");if(now)now.scrollTop=now.scrollHeight;
+    if(morseOn())morseRender();
   }
 
   function layout(){var s=stage.getBoundingClientRect();W=s.width||1;H=s.height||1;SX=s.left;SY=s.top;}
@@ -623,13 +662,14 @@ function compose(list){
   window.addEventListener("pointerdown",function(e){
     if(S.input!=="mouse"||dlg.open)return;
     if(S.nav==="joy"?!!e.target.closest("button,input,a,dialog"):!stage.contains(e.target))return;
+    if(e.target.closest("#mzSet"))return;      /* 모스픽 모드의 설정 칸은 누르는 단추 */
     setRaw(e);downAt=performance.now();
-    if(S.nav!=="count")blink();      /* 횟수 방식은 짧게는 옮기기, 길게는 고르기라서 뗄 때 가립니다 */
+    if(!onRelease())blink();      /* 횟수 방식과 모스픽 모드는 길고 짧음을 가려야 해서 뗄 때 넣습니다 */
   });
   window.addEventListener("pointerup",function(){
     if(S.input==="mouse"&&downAt){
       if(performance.now()-downAt>=600)longBlink();
-      else if(S.nav==="count")blink();
+      else if(onRelease())blink();
     }
     downAt=0;
   });
@@ -639,13 +679,13 @@ function compose(list){
     e.preventDefault();
     if(e.repeat)return;
     downAt=performance.now();
-    if(S.nav!=="count")blink();
+    if(!onRelease())blink();
   });
   window.addEventListener("keyup",function(e){
     if(e.code!=="Space"||S.input!=="mouse")return;
     if(downAt){
       if(performance.now()-downAt>=600)longBlink();
-      else if(S.nav==="count")blink();
+      else if(onRelease())blink();
     }
     downAt=0;
   });
@@ -758,7 +798,7 @@ function compose(list){
     var n=cntN,d=cur[n];
     cntPair=0;cntAt=now;
     if(!d||d.type==="value"){tick(220,0.25);return;}   /* 빈 칸 */
-    cntN=0;act(n);                                     /* 고른 뒤에도 켜 둡니다 */
+    act(n);                                            /* 고른 뒤에도 켜 두고, 테두리도 그 칸에 둡니다(같은 칸을 이어서 고르기) */
   }
   /* 한동안 깜빡이지 않으면 끕니다(frame 에서 부릅니다) */
   function countStep(now){
@@ -767,6 +807,7 @@ function compose(list){
     else if(now-cntAt>=S.cback*1000)countStop(true);
   }
   function blink(){
+    if(morseOn()){morseInput(".");return;}
     if(S.nav==="count"){if(!dlg.open&&!locked)countBlink();return;}
     if(S.pick!=="double"||!raw||dlg.open||locked)return;
     var joy=S.nav==="joy",z=joy?5:(zone||zoneAt(raw)),now=performance.now();
@@ -780,6 +821,7 @@ function compose(list){
   var lastLong=0;           /* 지우기 칸에서 길게 깜빡인 때 */
   var LONG_GAP=4000;        /* 이 안에 한 번 더 길게 깜빡이면 전체 지우기 */
   function longBlink(){
+    if(morseOn()){morseInput("-");return;}
     if(S.nav==="count"){if(!dlg.open&&!locked)countLong();return;}
     if(!raw||dlg.open||locked)return;
     var z=zone||(S.nav==="joy"?joyZone(raw):zoneAt(raw));
@@ -948,6 +990,122 @@ function compose(list){
     var t=tiles[z];t.classList.remove("is-hit");void t.offsetWidth;t.classList.add("is-hit");
   }
 
+  /* ---------- 모스픽 모드 ---------- */
+  /* 코드표. 점은 ".", 선은 "-". 화면마다 코드가 겹치지 않으면 되고, 두 글자 화면은 같은 코드를 다시 씁니다.
+     다른 코드의 앞부분인 코드가 많아서(. .. ... ....), 깜빡임을 멈추고 S.mgap 초가 지나야 한 칸으로 칩니다. */
+  var M_A=[[["ㄱ","..-"],["ㄴ","..-."],["ㄷ",".-."],["ㄹ","...-"],["ㅁ","..--"],["ㅂ",".-.-"],["ㅅ","...."],["ㅇ","..."],
+            ["ㅈ",".-.."],["ㅊ",".--."],["ㅋ","-..-"],["ㅌ","-.-."],["ㅍ","--.."],["ㅎ","-..."]],
+           [["ㄲ","..-"],["ㄸ",".-."],["ㅃ",".-.-"],["ㅆ","...."],["ㅉ",".-.."],["ㅑ","..."],["ㅕ","...-"],["ㅛ","..-."],
+            ["ㅠ","-..."],["ㅔ",".--."],["ㅐ","..--"]]];
+  var M_B=[[["ㅏ","-."],["ㅓ","--."],["ㅗ","---"],["ㅜ",".--"],["ㅡ","-.-"],["ㅣ","-.."]],
+           [["1","-..-"],["2","-.-."],["3","--.."],["4","-."],["5","-.."],["6","-.-"],["7","--."],["8","---"],["9",".--"],["0","....."]]];
+  /* 기능 칸. need: 쓴 글이 있어야 쓸 수 있는 칸(없으면 흐리게). 설정은 코드 없이 손으로 누릅니다 */
+  var M_FN=[{k:"remote",lb:"리모컨",c:"....-"},{k:"words",lb:"자주 쓰는 단어",c:"-...."},{k:"set",lb:"설정",c:""},
+            {k:"speak",lb:"말하기",c:"..",need:true},{k:"bell",lb:"호출",c:"--"},{k:"clear",lb:"전체 지우기",c:"..-..",need:true}];
+  var M_FN2=[{k:"page",lb:"화면 넘기기",c:"-"},{k:"back",lb:"지우기",c:".",need:true},{k:"space",lb:"띄어쓰기",c:".-",need:true}];
+  var M_MAX=5;             /* 가장 긴 코드의 길이 */
+  function morseOn(){return S.screen==="morse"&&!mAway}
+  /* 길고 짧음을 가려야 하는 방식인지(마우스는 뗄 때 넣습니다) */
+  function onRelease(){return morseOn()||S.nav==="count"}
+  /* 자주 쓰는 단어 화면: 단어 8개에 숫자 1~8 의 코드를 붙입니다 */
+  function morseWords(){
+    var out=[];
+    WORDS.forEach(function(w,i){if(w)out.push([w,M_B[1][i][1]])});
+    return out;
+  }
+  /* 지금 화면에서 코드가 뜻하는 것 {코드: {ch} | {word} | 기능 칸} */
+  function morseMap(){
+    var m={};
+    if(mPage==="W")morseWords().forEach(function(a){m[a[1]]={word:a[0]}});
+    else M_A[mPage].concat(M_B[mPage]).forEach(function(a){m[a[1]]={ch:a[0]}});
+    M_FN.concat(M_FN2).forEach(function(f){if(f.c)m[f.c]=f});
+    return m;
+  }
+  function morseInput(sym){
+    if(dlg.open||locked)return;
+    mBuf+=sym;mAt=performance.now();
+    if(mBuf.length>M_MAX){mBuf="";tick(220,0.25);}       /* 그런 코드는 없음 */
+    else tick(sym==="."?660:440,sym==="."?0.05:0.15);
+    morseRender();
+  }
+  /* 깜빡임을 멈추고 시간이 지나면 넣은 코드를 한 칸으로 칩니다(frame 에서 부릅니다) */
+  function morseStep(now){
+    if(!mBuf)return;
+    if(dlg.open||locked){mBuf="";morseRender();return;}
+    if(now-mAt<S.mgap*1000)return;
+    var c=mBuf;mBuf="";
+    morseDo(c);
+  }
+  function morseDo(code){
+    var a=morseMap()[code],text=compose(list);
+    if(!a||(a.need&&!text)){tick(220,0.25);morseRender();return;}
+    if(a.ch){
+      /* 모음을 이어서 넣으면 합칩니다(3*3 모드와 같습니다): ㅗ ㅏ 는 ㅘ, ㅜ ㅓ 는 ㅝ */
+      var prev=list[list.length-1],j=JUNG.indexOf(a.ch)>=0&&prev?VJOIN[prev+a.ch]:null;
+      if(j)list[list.length-1]=j;else list.push(a.ch);
+    }else if(a.word){
+      if(list.length&&list[list.length-1]!==" ")list.push(" ");
+      Array.prototype.push.apply(list,a.word.split(""));list.push(" ");
+      mPage=0;
+    }
+    else if(a.k==="page")mPage=mPage===0?1:0;              /* 단어 화면에서는 글자 첫 화면으로 */
+    else if(a.k==="words")mPage="W";
+    else if(a.k==="back")list.pop();
+    else if(a.k==="space")list.push(" ");
+    else if(a.k==="clear")list=[];
+    else if(a.k==="bell")alarm();
+    else if(a.k==="speak"){
+      var say=text.trim();
+      if(say){speak(say);if(past[past.length-1]!==say)past.push(say);}
+    }
+    else if(a.k==="remote"){mAway=true;view="R";focus=5;showScreen();tick(880,0.12);return;}
+    tick(880,0.12);
+    render();
+  }
+  function morseCode(c){
+    return '<span class="mk__code">'+c.split("").map(function(x){return x==="-"?'<i class="d"></i>':'<i></i>'}).join("")+'</span>';
+  }
+  function morseRender(){
+    var box=$("morse"),text=compose(list);
+    function key(big,label,c,off,tag,id){
+      return '<'+(tag||"div")+(id?' id="'+id+'" type="button"':"")+' class="mk'+(c&&c===mBuf?" is-on":"")+(off?" is-off":"")+'">'+
+        (big?'<span class="mk__ch">'+esc(big)+'</span>':"")+(label?'<span class="mk__lb">'+esc(label)+'</span>':"")+morseCode(c)+'</'+(tag||"div")+'>';
+    }
+    function grp(list2,cols,rows,html){
+      return '<div class="mz__grp" style="grid-template-columns:repeat('+cols+',1fr);flex:'+rows+'">'+html+'</div>';
+    }
+    function chars(a){return a.map(function(x){return key(x[0],"",x[1])}).join("")}
+    function fns(a){return a.map(function(f){return f.k==="set"?key("",f.lb,"",false,"button","mzSet"):key("",f.lb,f.c,!!f.need&&!text)}).join("")}
+    var left;
+    if(mPage==="W"){
+      var w=morseWords();
+      left=grp(w,2,4,w.map(function(x){return key("",x[0],x[1])}).join(""));
+    }else{
+      var a=M_A[mPage],b=M_B[mPage];
+      left=grp(a,4,Math.ceil(a.length/4),chars(a))+grp(b,4,Math.ceil(b.length/4),chars(b));
+    }
+    box.innerHTML='<div class="mz__col">'+left+'</div><div class="mz__col">'+
+      grp(M_FN,3,2,fns(M_FN))+grp(M_FN2,3,1,fns(M_FN2))+
+      '<div class="mz__buf" aria-label="넣은 깜빡임">'+morseCode(mBuf)+'</div>'+
+      '<div class="mz__text" id="mzText" aria-live="polite">'+esc(text)+'</div></div>';
+    var t=$("mzText");t.scrollTop=t.scrollHeight;
+  }
+  /* 화면 모드(3*3, 모스픽)에 맞게 자판을 바꿉니다 */
+  function showScreen(){
+    var on=morseOn();
+    $("morse").hidden=!on;
+    $("modeBtn").textContent=S.screen==="morse"?"모스픽 모드":"3*3 모드";
+    mBuf="";countStop();firstBlink=0;dwellT=0;armed=true;raw=null;
+    render();
+  }
+  $("modeBtn").addEventListener("click",function(){
+    S.screen=S.screen==="morse"?"grid":"morse";
+    try{localStorage.setItem("nundam-screen",S.screen);}catch(err){}
+    mAway=false;mPage=0;view=null;dblOn=false;focus=5;placeBoard();
+    showScreen();
+  });
+  $("morse").addEventListener("click",function(e){if(e.target.closest("#mzSet"))$("openSet").click();});
+
   var last=performance.now();
   function frame(now){
     var dt=Math.min(0.05,(now-last)/1000);last=now;
@@ -957,8 +1115,10 @@ function compose(list){
       else{jit.x=0;jit.y=0;}
       g={x:raw.x+jit.x,y:raw.y+jit.y};
     }
-    var cm=S.nav==="count";
-    if(cm){g=null;countStep(now);}     /* 깜빡임 횟수 방식은 어디를 보는지 쓰지 않습니다 */
+    if(mAway&&view===null){mAway=false;showScreen();}   /* 리모컨에서 나가면 모스픽 모드로 돌아옵니다 */
+    var mz=morseOn(),cm=!mz&&S.nav==="count";
+    if(mz){g=null;morseStep(now);}     /* 모스픽 모드와 깜빡임 횟수 방식은 어디를 보는지 쓰지 않습니다 */
+    if(cm){g=null;countStep(now);}
     var z=null;
     if(S.nav==="joy")z=joyHold(g?joyZone(g):null,now);
     else if(g)z=S.input==="camera"&&camZone?camZone:zoneAt(g);
@@ -1056,6 +1216,7 @@ function compose(list){
   range("gap","gapOut","gap",function(v){return v.toFixed(1)+"초"});
   range("cdbl","cdblOut","cdbl",function(v){return v.toFixed(1)+"초"});
   range("cback","cbackOut","cback",function(v){return v.toFixed(1)+"초"});
+  range("mgap","mgapOut","mgap",function(v){return v.toFixed(1)+"초"});
   range("dwell","dwellOut","dwell",function(v){return v.toFixed(1)+"초"});
   range("joyBack","joyBackOut","back",function(v){return v.toFixed(1)+"초"});
   range("noise","noiseOut","noise",function(v){return v?"±"+v+"px":"없음"});
@@ -1138,13 +1299,16 @@ function compose(list){
     setInput:setInput,notice:notice,
     render:function(){render()},
     nav:function(){return S.nav},
+    /* 지금 어디를 보는지 쓰지 않는 방식인지(깜빡임 횟수 방식, 모스픽 모드). 카메라는 이때 가운데 한 점만 봅니다 */
+    noGaze:function(){return morseOn()||S.nav==="count"},
     setNav:function(v){var b=document.querySelector('#navSeg [data-v="'+v+'"]');if(b)b.click();},speak:speak,tick:tick,alarm:alarm,
     closeSettings:closeSet,
     settingsOpen:function(){return !!dlg.open}
   };
 
+  try{if(localStorage.getItem("nundam-screen")==="morse")S.screen="morse";}catch(err){}
   setInput("mouse");
-  showMode();showNav();render();layout();requestAnimationFrame(frame);
+  showMode();showNav();showScreen();render();layout();requestAnimationFrame(frame);
 })();
 </script>
 <script src="remote.js"></script>

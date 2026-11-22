@@ -30,7 +30,7 @@
   var runCount=false;       /* 지금 쓰는 중인 방식이 깜빡임 횟수인지(쓰는 중에 방식을 바꾸면 다시 맞춥니다) */
   var faceSince=null;       /* 화면을 향하기 시작한 때 */
   var FACE_BACK=500;        /* 이만큼 이어서 화면을 향해야 다시 보는 것으로 칩니다(떨림으로 쉬기가 미뤄지지 않게) */
-  function countNav(){return N.nav()==="count"}
+  function countNav(){return N.noGaze()}   /* 깜빡임 횟수 방식이거나 모스픽 모드 */
   var flush=false,flushed=false;   /* 범위를 바꾼 다음 프레임은 빈 그림을 넣어 모델의 이전 추적을 지웁니다 */
   var light=null,lightAt=0,lightCv=null;
   var blinkIdx=null;
@@ -555,7 +555,7 @@
     },4000);
   }
   function verifyNow(){
-    if(countNav()){N.notice("깜빡임 횟수 방식은 어느 칸을 보는지 쓰지 않아 정확도 확인이 없습니다.",5000);return;}
+    if(countNav()){N.notice("지금 방식은 어느 칸을 보는지 쓰지 않아 정확도 확인이 없습니다.",5000);return;}
     if(!model||mode==="off"||mode==="loading")return;
     clearTimeout(resultT);
     N.closeSettings();ver.redone=true;enterVerify(false);
