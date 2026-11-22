@@ -228,7 +228,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   <section class="page" data-page="menu">
     <p>설정을 여는 동안에는 시선 입력이 멈춥니다. 바꾼 값은 바로 적용됩니다.</p>
     <div class="row">
-      <button class="btn" id="soundBtn" type="button" aria-pressed="false">소리 켜기</button>
+      <button class="btn" id="soundBtn" type="button" aria-pressed="true">소리 끄기</button>
       <button class="btn" id="clearBtn" type="button">모두 지우기</button>
     </div>
     <div class="menu" id="setMenu">
@@ -299,8 +299,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
   </div>
 
   <div class="field" data-mode="double">
-    <label class="field__top" for="gap"><span>두 번 깜빡임 간격</span><output id="gapOut">1.2초</output></label>
-    <input type="range" id="gap" min="0.6" max="1.8" step="0.1" value="1.2">
+    <label class="field__top" for="gap"><span>두 번 깜빡임 간격</span><output id="gapOut">1.5초</output></label>
+    <input type="range" id="gap" min="1.2" max="2.4" step="0.1" value="1.5">
   </div>
   <div class="field" data-mode="dwell">
     <label class="field__top" for="dwell"><span>응시 시간</span><output id="dwellOut">1.0초</output></label>
@@ -460,7 +460,7 @@ function compose(list){
   var tiles={};
   Array.prototype.forEach.call(document.querySelectorAll(".tile"),function(t){tiles[t.dataset.z]=t});
 
-  var S={pick:"double",gap:1.2,dwell:1.0,noise:0,showGaze:true,sound:false,input:"mouse",nav:"direct",back:4};
+  var S={pick:"double",gap:1.5,dwell:1.0,noise:0,showGaze:true,sound:true,input:"mouse",nav:"direct",back:4};
   var view=null;            /* null: 처음 화면, "W": 자주 쓰는 단어, "N": 숫자, "R": 리모컨, "R:묶음": 리모컨 묶음, 4 6 7 9: 펼친 묶음 */
   var num=0;                /* 숫자 화면에서 맞추는 값 */
   var dblOn=false;          /* 쌍자음, 이중모음 보기 */
@@ -796,6 +796,13 @@ function compose(list){
   vslider("vPitch","pitch",function(v){return near1(v,"낮게","높게")+" "+v.toFixed(2)});
   vslider("vVol","vol",function(v){return Math.round(v*100)+"%"});
   $("voiceTest").addEventListener("click",function(){speak("안녕하세요. 이 목소리로 말합니다.",null,true);});
+  /* 소리는 처음부터 켜져 있습니다(말하기, 확인음). 브라우저는 화면을 한 번 누른 뒤에야 소리를 내 주므로,
+     처음 누를 때 소리 낼 준비를 해 둡니다 */
+  function firstTouch(){
+    if(S.sound)primeAudio();
+    document.removeEventListener("pointerdown",firstTouch,true);document.removeEventListener("keydown",firstTouch,true);
+  }
+  document.addEventListener("pointerdown",firstTouch,true);document.addEventListener("keydown",firstTouch,true);
   $("soundBtn").addEventListener("click",function(){
     S.sound=!S.sound;this.setAttribute("aria-pressed",S.sound);this.textContent=S.sound?"소리 끄기":"소리 켜기";
     if(S.sound){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(err){}
