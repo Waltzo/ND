@@ -657,11 +657,14 @@
     var out=tracker.step(m,now);
     lastOut=out;
     /* 모스픽 모드는 화면을 보고 있을 때의 깜빡임만 받습니다. 깜빡임 횟수 방식은 가리지 않습니다. */
-    var look=C.facing(m,ref),gate=faceGate.update(look,out.closed,now),strict=N.morse(),take=!strict||gate.ok;
+    /* 코드를 넣기 시작했으면(busy) 그 코드가 끝날 때까지는 다시 따지지 않고 쉬기로도 가지 않습니다.
+       눈을 뜬 직후에는 화면 향함이 바로 잡히지 않아, 빠르게 이어 깜빡이면 뒤의 깜빡임이 버려지기 때문입니다. */
+    var look=C.facing(m,ref),gate=faceGate.update(look,out.closed,now),strict=N.morse(),busy=N.morseBusy(),take=!strict||busy||gate.ok;
+    N.closed(out.closed);
     if(out.longReady&&take)N.longCue();
     if(out.opened)showBlink(out.dur);
     N.setGaze(null);
-    if(strict&&gate.away){enterSleep();return;}
+    if(strict&&gate.away&&!busy){enterSleep();return;}
     /* 얼굴을 놓침, 한쪽 눈만 보임, 얼굴이나 눈이 화면 밖을 향함, 눈을 오래 감음 */
     var on=!out.closed&&look;
     if(on){
@@ -689,6 +692,7 @@
     tracker.away=N.nav()==="joy"?1.5:0.3;
     var out=tracker.step(m,now);
     lastOut=out;
+    N.closed(out.closed);
     if(out.longReady)N.longCue();
     if(out.opened)showBlink(out.dur);
     N.setGaze(out.pt,out.zone);
